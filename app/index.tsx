@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
+import { Audio } from 'expo-av';
 
 const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
@@ -45,9 +46,54 @@ export default function MainMenuScreen() {
   const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
   const [currentGuess, setCurrentGuess] = useState<string>('');
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   // This state is our single source of truth.
   const [locale, setLocale] = useState(i18n.locale);
+
+  // Load and cleanup sound
+  useEffect(() => {
+    async function loadSoundObject() {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/sounds/correct.mp3')
+        );
+        setSound(sound);
+      } catch (error) {
+        console.error("Couldn't load sound", error);
+      }
+    }
+    loadSoundObject();
+
+    return () => {
+      sound?.unloadAsync();
+    };
+  }, []);
+
+  // Play sound function
+  async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
+    if (!sound) return;
+    try {
+      await sound.unloadAsync();
+      switch (soundType) {
+        case 'correct':
+          await sound.loadAsync(require('../assets/sounds/correct.mp3'));
+          break;
+        case 'wrong':
+          await sound.loadAsync(require('../assets/sounds/wrong.mp3'));
+          break;
+        case 'win':
+          await sound.loadAsync(require('../assets/sounds/win.mp3'));
+          break;
+        case 'lose':
+          await sound.loadAsync(require('../assets/sounds/lose.mp3'));
+          break;
+      }
+      await sound.playAsync();
+    } catch (error) {
+      console.error("Couldn't play sound", error);
+    }
+  }
 
   // This function updates both our state AND the i18n locale.
   const changeLocale = (newLocale: string) => {
@@ -123,6 +169,13 @@ export default function MainMenuScreen() {
 
       console.log(`Guess: ${upperLetter}, Correct: ${isCorrect}, Wrong count: ${currentWrongCount} -> ${wrongGuesses}`);
 
+      // Play sound for correct or wrong guess
+      if (isCorrect) {
+        playSound('correct');
+      } else {
+        playSound('wrong');
+      }
+
       // Update local state
       setGuessedLetters(newGuessedLetters);
       setCurrentGameData({
@@ -148,8 +201,10 @@ export default function MainMenuScreen() {
       console.log(`All letters guessed: ${allLettersGuessed}`);
       
       if (allLettersGuessed) {
+        playSound('win');
         Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
       } else if (wrongGuesses >= 6) {
+        playSound('lose');
         Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
       }
 
