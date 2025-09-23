@@ -166,6 +166,7 @@ export default function MainMenuScreen() {
   const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [gamesUnsubscribe, setGamesUnsubscribe] = useState<(() => void) | null>(null);
 
   // This state is our single source of truth.
   const [locale, setLocale] = useState(i18n.locale);
@@ -188,6 +189,16 @@ export default function MainMenuScreen() {
       sound?.unloadAsync();
     };
   }, []);
+
+  // Cleanup games listener on component unmount
+  useEffect(() => {
+    return () => {
+      if (gamesUnsubscribe) {
+        console.log('Component unmounting, cleaning up games listener');
+        gamesUnsubscribe();
+      }
+    };
+  }, [gamesUnsubscribe]);
 
   // Play sound function
   async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
@@ -355,6 +366,13 @@ export default function MainMenuScreen() {
   };
 
   const resetToMainMenu = () => {
+    // Clean up games listener when leaving browse games
+    if (gamesUnsubscribe) {
+      console.log('Cleaning up games listener on menu reset');
+      gamesUnsubscribe();
+      setGamesUnsubscribe(null);
+    }
+    
     setGamePhase('main_menu');
     setCategory('');
     setCreatedGameId(null);
@@ -370,6 +388,13 @@ export default function MainMenuScreen() {
   const loadAvailableGames = async () => {
     try {
       console.log('Loading available games...');
+      
+      // Clean up existing listener first
+      if (gamesUnsubscribe) {
+        console.log('Cleaning up previous games listener');
+        gamesUnsubscribe();
+        setGamesUnsubscribe(null);
+      }
       
       // Simplified query to avoid composite index requirement
       const gamesQuery = query(
@@ -423,6 +448,7 @@ export default function MainMenuScreen() {
       );
       
       // Store unsubscribe function for cleanup
+      setGamesUnsubscribe(() => unsubscribe);
       return unsubscribe;
     } catch (error: any) {
       console.error("Error setting up games listener:", error);
