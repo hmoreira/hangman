@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
@@ -14,42 +15,118 @@ const CATEGORIES = [
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: string[], onSelectLetter: (letter: string) => void }) => {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [showScrollHint, setShowScrollHint] = useState(true);
+  const [isAtEnd, setIsAtEnd] = useState(false);
+
+  // Gentle pulse animation for the scroll hint
+  useEffect(() => {
+    if (showScrollHint) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      
+      // Hide hint after 4 seconds
+      const timeout = setTimeout(() => {
+        setShowScrollHint(false);
+        pulse.stop();
+      }, 4000);
+      
+      return () => {
+        clearTimeout(timeout);
+        pulse.stop();
+      };
+    }
+  }, [showScrollHint]);
+
   const handleLetterPress = (letter: string) => {
     try {
       if (guessedLetters && !guessedLetters.includes(letter) && onSelectLetter) {
         onSelectLetter(letter);
+        setShowScrollHint(false); // Hide hint after first interaction
       }
     } catch (error) {
       console.error('Error in letter press:', error);
     }
   };
 
+  const handleScroll = (event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtEnd = contentOffset.x >= (contentSize.width - layoutMeasurement.width - 10);
+    setIsAtEnd(isAtEnd);
+    setShowScrollHint(false); // Hide hint when user starts scrolling
+  };
+
   return (
     <View style={styles.carouselContainer}>
-      <Text style={styles.carouselTitle}>🔤 Select a Letter</Text>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.carouselContent}
-        style={styles.carouselScrollView}
-      >
-        {ALPHABET.map((letter) => {
-          const isGuessed = guessedLetters ? guessedLetters.includes(letter) : false;
-          return (
-            <TouchableOpacity
-              key={letter}
-              style={[styles.letterCard, isGuessed && styles.letterCardDisabled]}
-              onPress={() => handleLetterPress(letter)}
-              disabled={isGuessed}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.letterText, isGuessed && styles.letterTextDisabled]}>
-                {letter}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <Text style={styles.carouselTitle}>🔤 {i18n.t('selectLetter')}</Text>
+      <View style={styles.carouselWrapper}>
+        <ScrollView 
+          ref={scrollViewRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContent}
+          style={styles.carouselScrollView}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          decelerationRate="fast"
+        >
+          {ALPHABET.map((letter) => {
+            const isGuessed = guessedLetters ? guessedLetters.includes(letter) : false;
+            return (
+              <TouchableOpacity
+                key={letter}
+                style={[styles.letterCard, isGuessed && styles.letterCardDisabled]}
+                onPress={() => handleLetterPress(letter)}
+                disabled={isGuessed}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.letterText, isGuessed && styles.letterTextDisabled]}>
+                  {letter}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        
+        {/* Right fade indicator - shows when there are more letters to scroll */}
+        {!isAtEnd && (
+          <LinearGradient
+            colors={['transparent', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,1)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.rightFadeIndicator}
+            pointerEvents="none"
+          >
+            {showScrollHint && (
+              <Animated.View 
+                style={[
+                  styles.scrollHintContainer,
+                  {
+                    transform: [{ scale: pulseAnim }]
+                  }
+                ]}
+              >
+                <Text style={styles.scrollHintText}>👉</Text>
+                <Text style={styles.scrollHintSubText}>Scroll</Text>
+              </Animated.View>
+            )}
+          </LinearGradient>
+        )}
+      </View>
     </View>
   );
 };
@@ -757,6 +834,33 @@ const styles = StyleSheet.create({
   },
   letterTextDisabled: {
     color: '#999',
+  },
+  carouselWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
+  rightFadeIndicator: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  scrollHintContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollHintText: {
+    fontSize: 24,
+    marginBottom: 2,
+  },
+  scrollHintSubText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: 'bold',
   },
   noGamesContainer: {
     flex: 1,
