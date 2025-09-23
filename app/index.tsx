@@ -1,204 +1,505 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
-import Svg, { Line, Circle } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context'; 
-import { Audio } from 'expo-av';
+import React, { useState } from 'react';
+import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore"; 
+import { db } from '../firebaseConfig';
+import i18n from '../i18n';
 
-// --- Constants ---
-const WORD_TO_GUESS = "DEVELOPER";
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
-const MAX_WRONG_GUESSES = 6;
-
-
-// =======================================================
-// --- HANGMAN DRAWING COMPONENT ---
-// =======================================================
-const BODY_PARTS = [
-  <Circle key="head" cx="120" cy="70" r="20" stroke="black" strokeWidth="3" fill="none" />,
-  <Line key="body" x1="120" y1="90" x2="120" y2="150" stroke="black" strokeWidth="3" />,
-  <Line key="right-arm" x1="120" y1="110" x2="90" y2="90" stroke="black" strokeWidth="3" />,
-  <Line key="left-arm" x1="120" y1="110" x2="150" y2="90" stroke="black" strokeWidth="3" />,
-  <Line key="right-leg" x1="120" y1="150" x2="90" y2="180" stroke="black" strokeWidth="3" />,
-  <Line key="left-leg" x1="120" y1="150" x2="150" y2="180" stroke="black" strokeWidth="3" />,
+const CATEGORIES = [
+  'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
+  'SPORTS', 'FAMOUS_BRANDS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE',
 ];
 
-function HangmanDrawing({ wrongGuesses }: { wrongGuesses: number }) {
+const WordInputScreen = ({ category, onSubmit, onBack }: { category: string, onSubmit: (word: string) => void, onBack: () => void }) => {
+  const [word, setWord] = useState('');
+
   return (
-    <View style={styles.drawingContainer}>
-      <Svg height="250" width="200">
-        {BODY_PARTS.slice(0, wrongGuesses)}
-        <Line x1="120" y1="20" x2="120" y2="50" stroke="black" strokeWidth="3" />
-        <Line x1="40" y1="20" x2="120" y2="20" stroke="black" strokeWidth="3" />
-        <Line x1="40" y1="230" x2="40" y2="20" stroke="black" strokeWidth="3" />
-        <Line x1="10" y1="230" x2="70" y2="230" stroke="black" strokeWidth="3" />
-      </Svg>
+    <View style={styles.inputContainer}>
+      <Text style={styles.subtitle}>{i18n.t('categories.' + category as any)}</Text>
+      <Text style={styles.instructions}>{i18n.t('enterAWord')}</Text>
+      <TextInput
+        style={styles.input} value={word} onChangeText={setWord}
+        placeholder="SECRET WORD" autoCapitalize="characters"
+        autoCorrect={false} maxLength={20}
+      />
+      <View style={styles.buttonWrapper}>
+        <Button 
+          title={word.trim() ? i18n.t('createGame') : i18n.t('enterAWord')} 
+          onPress={() => onSubmit(word)} 
+          disabled={!word.trim()} 
+        />
+      </View>
+      <View style={styles.buttonWrapper}>
+        <Button title={i18n.t('backToCategories')} onPress={onBack} color="#888" />
+      </View>
     </View>
   );
-}
-// =======================================================
+};
 
 
-// --- Main Screen Component ---
-export default function HangmanGameScreen() {
+export default function MainMenuScreen() {
+  const [gamePhase, setGamePhase] = useState<'main_menu' | 'choose_category' | 'enter_word' | 'game_created' | 'join_game' | 'playing_game'>('main_menu');
+  const [category, setCategory] = useState<string>('');
+  const [createdGameId, setCreatedGameId] = useState<string | null>(null);  
+  const [joinGameId, setJoinGameId] = useState<string>('');
+  const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [currentGuess, setCurrentGuess] = useState<string>('');
 
-  useEffect(() => {
-    async function loadSoundObject() {
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/correct.mp3') // <-- UPDATED PATH
-      );
-      setSound(sound);
-    }
-    loadSoundObject();
+  // This state is our single source of truth.
+  const [locale, setLocale] = useState(i18n.locale);
 
-    return () => {
-      sound?.unloadAsync();
-    };
-  }, []);
-
-  async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
-    if (!sound) return;
-    try {
-      await sound.unloadAsync();
-      switch (soundType) {
-        case 'correct':
-          await sound.loadAsync(require('../assets/sounds/correct.mp3')); // <-- UPDATED PATH
-          break;
-        case 'wrong':
-          await sound.loadAsync(require('../assets/sounds/wrong.mp3')); // <-- UPDATED PATH
-          break;
-        case 'win':
-          await sound.loadAsync(require('../assets/sounds/win.mp3')); // <-- UPDATED PATH
-          break;
-        case 'lose':
-          await sound.loadAsync(require('../assets/sounds/lose.mp3')); // <-- UPDATED PATH
-          break;
-      }
-      await sound.playAsync();
-    } catch (error) {
-      console.error("Couldn't play sound", error);
-    }
-  }
+  // This function updates both our state AND the i18n locale.
+  const changeLocale = (newLocale: string) => {
+    console.log('Changing locale to:', newLocale);
+    i18n.locale = newLocale;
+    setLocale(newLocale);
+    console.log('After change - i18n.locale:', i18n.locale, 'state locale:', newLocale);
+  };
   
-  const wrongGuesses = guessedLetters.filter(
-    letter => !WORD_TO_GUESS.includes(letter)
-  ).length;
-  const isGameWon = WORD_TO_GUESS.split('').every(letter => guessedLetters.includes(letter));
-  const isGameLost = wrongGuesses >= MAX_WRONG_GUESSES;
-  const isGameOver = isGameWon || isGameLost;
-
-  const handleGuess = (letter: string) => {
-    if (isGameOver || guessedLetters.includes(letter)) return;
-    setGuessedLetters(currentLetters => [...currentLetters, letter]);
+  const createOnlineGame = async (word: string, category: string) => {
+    if (!word || !category) return;
+    try {
+      const gameDocRef = await addDoc(collection(db, "games"), {
+        status: "waiting", category: category, secretWord: word.toUpperCase().trim(),
+        guessedLetters: [], wrongGuesses: 0, createdAt: serverTimestamp()
+      });
+      console.log("Game created with ID: ", gameDocRef.id);
+      setCreatedGameId(gameDocRef.id);
+      setGamePhase('game_created');
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      Alert.alert("Error", "Could not create the game. Please try again.");
+    }
   };
 
-  const playAgain = () => {
+  const joinGame = async (gameId: string) => {
+    if (!gameId.trim()) {
+      Alert.alert("Error", "Please enter a game code.");
+      return;
+    }
+    
+    try {
+      const gameDoc = await getDoc(doc(db, "games", gameId.trim()));
+      if (gameDoc.exists()) {
+        const gameData = gameDoc.data();
+        if (gameData.status === "waiting") {
+          // Update game status to "playing" 
+          await updateDoc(doc(db, "games", gameId.trim()), {
+            status: "playing"
+          });
+          // Store game data and start playing
+          setCurrentGameData({ ...gameData, id: gameId.trim() });
+          setGuessedLetters(gameData.guessedLetters || []);
+          setGamePhase('playing_game');
+        } else {
+          Alert.alert("Error", "This game is no longer available or already in progress.");
+        }
+      } else {
+        Alert.alert("Error", "Game not found. Please check the code and try again.");
+      }
+    } catch (e) {
+      console.error("Error joining game: ", e);
+      Alert.alert("Error", "Could not join the game. Please try again.");
+    }
+  };
+
+  const makeGuess = async (letter: string) => {
+    if (!currentGameData || !letter.trim()) return;
+    
+    const upperLetter = letter.toUpperCase();
+    if (guessedLetters.includes(upperLetter)) {
+      Alert.alert("Already guessed", "You already guessed this letter!");
+      return;
+    }
+
+    try {
+      const newGuessedLetters = [...guessedLetters, upperLetter];
+      const isCorrect = currentGameData.secretWord.includes(upperLetter);
+      const currentWrongCount = currentGameData.wrongGuesses || 0;
+      const wrongGuesses = isCorrect ? 
+        currentWrongCount : 
+        currentWrongCount + 1;
+
+      console.log(`Guess: ${upperLetter}, Correct: ${isCorrect}, Wrong count: ${currentWrongCount} -> ${wrongGuesses}`);
+
+      // Update local state
+      setGuessedLetters(newGuessedLetters);
+      setCurrentGameData({
+        ...currentGameData,
+        guessedLetters: newGuessedLetters,
+        wrongGuesses: wrongGuesses
+      });
+      setCurrentGuess('');
+
+      // Update database
+      await updateDoc(doc(db, "games", currentGameData.id), {
+        guessedLetters: newGuessedLetters,
+        wrongGuesses: wrongGuesses
+      });
+
+      // Check win/lose conditions
+      const uniqueLettersInWord: string[] = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
+      const allLettersGuessed = uniqueLettersInWord.every((letter: string) => newGuessedLetters.includes(letter));
+      
+      console.log(`Secret word: ${currentGameData.secretWord}`);
+      console.log(`Unique letters needed: ${uniqueLettersInWord.join(', ')}`);
+      console.log(`Guessed letters: ${newGuessedLetters.join(', ')}`);
+      console.log(`All letters guessed: ${allLettersGuessed}`);
+      
+      if (allLettersGuessed) {
+        Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
+      } else if (wrongGuesses >= 6) {
+        Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
+      }
+
+    } catch (e) {
+      console.error("Error making guess: ", e);
+      Alert.alert("Error", "Could not submit guess. Please try again.");
+    }
+  };
+
+  const handleCategorySelect = (selectedCategory: string) => {
+    if (selectedCategory && selectedCategory !== '') {
+      setCategory(selectedCategory);
+      setGamePhase('enter_word');
+    }
+  };
+
+  const resetToMainMenu = () => {
+    setGamePhase('main_menu');
+    setCategory('');
+    setCreatedGameId(null);
+    setJoinGameId('');
+    setCurrentGameData(null);
     setGuessedLetters([]);
+    setCurrentGuess('');
+  };
+
+  const goToCreateGame = () => {
+    setGamePhase('choose_category');
+  };
+
+  const goToJoinGame = () => {
+    setGamePhase('join_game');
+  };
+
+  const LanguageSwitcher = () => {
+    return (
+      <View style={styles.languageSwitcher}>
+          <Button 
+            title={locale === 'en' ? "EN ✓" : "EN"} 
+            onPress={() => changeLocale('en')} 
+            disabled={locale === 'en'} 
+          />
+          <Button 
+            title={locale === 'pt' ? "PT ✓" : "PT"} 
+            onPress={() => changeLocale('pt')} 
+            disabled={locale === 'pt'} 
+          />
+      </View>
+    );
+  };
+
+  // Helper function to display the word with guessed letters
+  const displayWord = () => {
+    if (!currentGameData) return '';
+    return currentGameData.secretWord
+      .split('')
+      .map((char: string) => {
+        if (/[A-Z]/.test(char)) {
+          // It's a letter - show it if guessed, otherwise show blank
+          return guessedLetters.includes(char) ? char : '_';
+        } else {
+          // It's not a letter (space, punctuation, etc.) - always show it
+          return char;
+        }
+      })
+      .join(' ');
+  };
+
+  // Helper function to get hangman drawing
+  const getHangmanDrawing = (wrongCount: number) => {
+    console.log(`Drawing hangman for wrong count: ${wrongCount}`);
+    const drawings = [
+      "",  // 0 wrong
+      "  +---+\n  |   |\n  O   |\n      |\n      |\n      |\n=========", // 1 - Head
+      "  +---+\n  |   |\n  O   |\n  |   |\n      |\n      |\n=========", // 2 - Body
+      "  +---+\n  |   |\n  O   |\n /|   |\n      |\n      |\n=========", // 3 - Left arm
+      "  +---+\n  |   |\n  O   |\n /|\\  |\n      |\n      |\n=========", // 4 - Right arm
+      "  +---+\n  |   |\n  O   |\n /|\\  |\n /    |\n      |\n=========", // 5 - Left leg
+      "  +---+\n  |   |\n  O   |\n /|\\  |\n / \\  |\n      |\n========="  // 6 - Right leg (dead)
+    ];
+    return drawings[Math.min(wrongCount, 6)];
+  };
+
+  if (gamePhase === 'playing_game' && currentGameData) {
+    const wrongCount = currentGameData.wrongGuesses || 0;
+    const isGameOver = wrongCount >= 6;
+    const uniqueLettersInWord: string[] = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
+    const isWon = uniqueLettersInWord.every((letter: string) => guessedLetters.includes(letter));
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <Text style={styles.title}>{i18n.t('title')}</Text>
+        <Text style={styles.subtitle}>Category: {i18n.t('categories.' + currentGameData.category as any)}</Text>
+        
+        {/* Hangman Drawing */}
+        <Text style={styles.hangmanDrawing}>{getHangmanDrawing(wrongCount)}</Text>
+        
+        {/* Word Display */}
+        <Text style={styles.wordDisplay}>{displayWord()}</Text>
+        
+        {/* Wrong Guesses Count */}
+        <Text style={styles.guessInfo}>Wrong guesses: {wrongCount}/6</Text>
+        
+        {/* Guessed Letters */}
+        {guessedLetters.length > 0 && (
+          <Text style={styles.guessedLetters}>
+            Guessed: {guessedLetters.join(', ')}
+          </Text>
+        )}
+
+        {/* Guess Input - only show if game is not over */}
+        {!isGameOver && !isWon && (
+          <>
+            <Text style={styles.instructions}>Guess a letter:</Text>
+            <TextInput
+              style={styles.input}
+              value={currentGuess}
+              onChangeText={setCurrentGuess}
+              placeholder="Enter letter"
+              maxLength={1}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <View style={styles.buttonWrapper}>
+              <Button 
+                title={currentGuess.trim() ? "Guess Letter" : "Enter a letter"} 
+                onPress={() => makeGuess(currentGuess)} 
+                disabled={!currentGuess.trim()} 
+              />
+            </View>
+          </>
+        )}
+
+        {/* Back to Menu Button */}
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
-  useEffect(() => {
-    if (guessedLetters.length === 0) return;
-    if (isGameWon) {
-      playSound('win');
-      Alert.alert("You Won!", "Congratulations!", [{ text: "Play Again", onPress: playAgain }]);
-      return;
-    }
-    if (isGameLost) {
-      playSound('lose');
-      Alert.alert("You Lost", `The word was: ${WORD_TO_GUESS}`, [{ text: "Play Again", onPress: playAgain }]);
-      return;
-    }
-    const lastGuessedLetter = guessedLetters[guessedLetters.length - 1];
-    if (WORD_TO_GUESS.includes(lastGuessedLetter)) {
-      playSound('correct');
-    } else {
-      playSound('wrong');
-    }
-  }, [guessedLetters]);
+  if (gamePhase === 'main_menu') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <Text style={styles.title}>{i18n.t('title')}</Text>
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('createNewGame')} onPress={goToCreateGame} />
+        </View>
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('joinExistingGame')} onPress={goToJoinGame} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Hangman</Text>
-      
-      <HangmanDrawing wrongGuesses={wrongGuesses} />
+  if (gamePhase === 'join_game') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <Text style={styles.title}>{i18n.t('title')}</Text>
+        <Text style={styles.subtitle}>{i18n.t('enterGameCode')}</Text>
+        <TextInput
+          style={styles.input}
+          value={joinGameId}
+          onChangeText={setJoinGameId}
+          placeholder="GAME CODE"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={20}
+        />
+        <View style={styles.buttonWrapper}>
+          <Button 
+            title={joinGameId.trim() ? i18n.t('joinGame') : i18n.t('enterGameCode')} 
+            onPress={() => joinGame(joinGameId)} 
+            disabled={!joinGameId.trim()} 
+          />
+        </View>
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-      <View style={styles.wordContainer}>
-        {WORD_TO_GUESS.split('').map((letter, index) => (
-          <Text key={index} style={styles.letter}>
-            {guessedLetters.includes(letter) ? letter : '_'}
-          </Text>
-        ))}
-      </View>
+  if (gamePhase === 'game_created' && createdGameId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <Text style={styles.title}>{i18n.t('gameCreated')}</Text>
+        <Text style={styles.subtitle}>{i18n.t('shareCode')}</Text>
+        <Text style={styles.gameIdText}>{createdGameId}</Text>
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('createAnotherGame')} onPress={resetToMainMenu} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-      <View style={styles.keyboardContainer}>
-        {ALPHABET.map((letter) => {
-          const isGuessed = guessedLetters.includes(letter);
-          return (
-            <TouchableOpacity
-              key={letter}
-              onPress={() => handleGuess(letter)}
-              disabled={isGuessed || isGameOver}
-              style={[styles.key, isGuessed && styles.keyGuessed]}
-            >
-              <Text style={styles.keyText}>{letter}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </SafeAreaView>
-  );
+  if (gamePhase === 'enter_word') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <WordInputScreen 
+          category={category} 
+          onSubmit={(word) => createOnlineGame(word, category)}
+          onBack={resetToMainMenu}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (gamePhase === 'choose_category') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LanguageSwitcher />
+        <Text style={styles.title}>{i18n.t('title')}</Text>
+        <Text style={styles.subtitle}>{i18n.t('chooseCategory')}</Text>
+        
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={category}
+            style={styles.picker}
+            onValueChange={(itemValue) => handleCategorySelect(itemValue)}
+          >
+            <Picker.Item label={i18n.t('chooseCategory')} value="" />
+            {CATEGORIES.map(cat => (
+              <Picker.Item 
+                key={cat} 
+                label={i18n.t('categories.' + cat as any)} 
+                value={cat} 
+              />
+            ))}
+          </Picker>
+        </View>
+        <View style={styles.buttonWrapper}>
+          <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
+    container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     backgroundColor: '#f5f5f5',
-    padding: 10,
-    paddingBottom: 30
+    paddingTop: 100, // Space for language switcher
+    paddingBottom: 50, // Add bottom padding for navigation area
+  },
+  languageSwitcher: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    flexDirection: 'row',
+    zIndex: 1, // Ensure it's above other elements
   },
   title: {
     fontSize: 36,
     fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+    paddingHorizontal: 100, // Add horizontal padding to prevent overlap with language switcher
   },
-  drawingContainer: {
-    height: 250,
-  },
-  wordContainer: {
-    flexDirection: 'row',
-  },
-  letter: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginHorizontal: 5,
-    borderBottomWidth: 3,
-    borderColor: '#000',
-    minWidth: 30,
+  subtitle: {
+    fontSize: 22,
+    marginBottom: 20,
+    color: '#333',
     textAlign: 'center',
   },
-  keyboardContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
+  instructions: {
+    fontSize: 16,
+    color: 'gray',
+    marginBottom: 10,
+    textAlign: 'center',
   },
-  key: {
-    backgroundColor: '#add8e6',
-    padding: 10,
-    margin: 4,
-    borderRadius: 5,
-    width: 35,
+  pickerContainer: {
+    width: '80%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: 'white',
+    marginBottom: 20,
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+  },
+  categoryContainer: {
+    width: '80%',
     alignItems: 'center',
   },
-  keyGuessed: {
-    backgroundColor: '#d3d3d3',
-    opacity: 0.5,
+  buttonWrapper: {
+    marginVertical: 10,
+    width: 250,
   },
-  keyText: {
-    fontSize: 18,
+  inputContainer: {
+    width: '80%',
+    alignItems: 'center',
+  },
+  input: {
+    borderBottomWidth: 2,
+    borderColor: 'black',
+    width: '100%',
+    padding: 10,
+    fontSize: 24,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  gameIdText: {
+    fontSize: 28,
     fontWeight: 'bold',
+    backgroundColor: '#e0e0e0',
+    padding: 20,
+    borderRadius: 10,
+    letterSpacing: 2,
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  hangmanDrawing: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  wordDisplay: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 8,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#2196F3',
+  },
+  guessInfo: {
+    fontSize: 18,
+    marginBottom: 10,
+    textAlign: 'center',
+    color: '#666',
+  },
+  guessedLetters: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#888',
+    fontStyle: 'italic',
   },
 });

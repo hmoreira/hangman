@@ -1,0 +1,27 @@
+{
+  "title": "Hang Me",
+  "chooseCategory": "Player 1: Choose a Category",
+  "enterAWord": "Player 1, enter a secret word:",
+  "createGame": "Create Game",
+  "joinGame": "Join Game",
+  "createNewGame": "Create New Game",
+  "joinExistingGame": "Join Existing Game",
+  "enterGameCode": "Enter Game Code:",
+  "backToMenu": "Back to Menu",
+  "backToCategories": "Back to Categories",
+  "gameCreated": "Game Created!",
+  "shareCode": "Share this code with your friend:",
+  "createAnotherGame": "Create a New Game",
+  "categories": {
+    "ANIMALS": "ANIMALS",
+    "CITIES": "CITIES",
+    "FRUITS": "FRUITS",
+    "COUNTRIES": "COUNTRIES",
+    "PROFESSIONS": "PROFESSIONS",
+    "MOVIES": "MOVIES",
+    "SPORTS": "SPORTS",
+    "FAMOUS_BRANDS": "FAMOUS BRANDS",
+    "MUSICAL_INSTRUMENTS": "MUSICAL INSTRUMENTS",
+    "THINGS_IN_A_HOUSE": "THINGS IN A HOUSE"
+  }
+}

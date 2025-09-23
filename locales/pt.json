@@ -1,0 +1,27 @@
+{
+  "title": "Me Enforque",
+  "chooseCategory": "Jogador 1: Escolha uma Categoria",
+  "enterAWord": "Jogador 1, digite uma palavra secreta:",
+  "createGame": "Criar Jogo",
+  "joinGame": "Entrar no Jogo",
+  "createNewGame": "Criar Novo Jogo",
+  "joinExistingGame": "Entrar em Jogo Existente",
+  "enterGameCode": "Digite o Código do Jogo:",
+  "backToMenu": "Voltar ao Menu",
+  "backToCategories": "Voltar para Categorias",
+  "gameCreated": "Jogo Criado!",
+  "shareCode": "Compartilhe este código com seu amigo:",
+  "createAnotherGame": "Criar Novo Jogo",
+  "categories": {
+    "ANIMALS": "ANIMAIS",
+    "CITIES": "CIDADES",
+    "FRUITS": "FRUTAS",
+    "COUNTRIES": "PAÍSES",
+    "PROFESSIONS": "PROFISSÕES",
+    "MOVIES": "FILMES",
+    "SPORTS": "ESPORTES",
+    "FAMOUS_BRANDS": "MARCAS FAMOSAS",
+    "MUSICAL_INSTRUMENTS": "INSTRUMENTOS MUSICAIS",
+    "THINGS_IN_A_HOUSE": "COISAS DE CASA"
+  }
+}
