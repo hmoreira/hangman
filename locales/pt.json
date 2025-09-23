@@ -12,6 +12,11 @@
   "gameCreated": "Jogo Criado!",
   "shareCode": "Compartilhe este código com seu amigo:",
   "createAnotherGame": "Criar Novo Jogo",
+  "selectLetter": "🔤 Selecione uma Letra",
+  "availableGames": "Jogos Disponíveis",
+  "noGamesAvailable": "Nenhum jogo disponível",
+  "createFirstGame": "Seja o primeiro a criar um jogo!",
+  "refreshGames": "Atualizar Jogos",
   "categories": {
     "ANIMALS": "ANIMAIS",
     "CITIES": "CIDADES",

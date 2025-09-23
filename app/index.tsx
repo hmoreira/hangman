@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore"; 
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
@@ -10,6 +10,49 @@ const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
   'SPORTS', 'FAMOUS_BRANDS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE',
 ];
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: string[], onSelectLetter: (letter: string) => void }) => {
+  const handleLetterPress = (letter: string) => {
+    try {
+      if (guessedLetters && !guessedLetters.includes(letter) && onSelectLetter) {
+        onSelectLetter(letter);
+      }
+    } catch (error) {
+      console.error('Error in letter press:', error);
+    }
+  };
+
+  return (
+    <View style={styles.carouselContainer}>
+      <Text style={styles.carouselTitle}>🔤 Select a Letter</Text>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.carouselContent}
+        style={styles.carouselScrollView}
+      >
+        {ALPHABET.map((letter) => {
+          const isGuessed = guessedLetters ? guessedLetters.includes(letter) : false;
+          return (
+            <TouchableOpacity
+              key={letter}
+              style={[styles.letterCard, isGuessed && styles.letterCardDisabled]}
+              onPress={() => handleLetterPress(letter)}
+              disabled={isGuessed}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.letterText, isGuessed && styles.letterTextDisabled]}>
+                {letter}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
 
 const WordInputScreen = ({ category, onSubmit, onBack }: { category: string, onSubmit: (word: string) => void, onBack: () => void }) => {
   const [word, setWord] = useState('');
@@ -39,13 +82,12 @@ const WordInputScreen = ({ category, onSubmit, onBack }: { category: string, onS
 
 
 export default function MainMenuScreen() {
-  const [gamePhase, setGamePhase] = useState<'main_menu' | 'choose_category' | 'enter_word' | 'game_created' | 'join_game' | 'playing_game'>('main_menu');
+  const [gamePhase, setGamePhase] = useState<'main_menu' | 'choose_category' | 'enter_word' | 'game_created' | 'browse_games' | 'playing_game'>('main_menu');
   const [category, setCategory] = useState<string>('');
   const [createdGameId, setCreatedGameId] = useState<string | null>(null);  
-  const [joinGameId, setJoinGameId] = useState<string>('');
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
-  const [currentGuess, setCurrentGuess] = useState<string>('');
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   // This state is our single source of truth.
@@ -120,8 +162,8 @@ export default function MainMenuScreen() {
   };
 
   const joinGame = async (gameId: string) => {
-    if (!gameId.trim()) {
-      Alert.alert("Error", "Please enter a game code.");
+    if (!gameId || !gameId.trim()) {
+      Alert.alert("Error", "Invalid game ID.");
       return;
     }
     
@@ -142,24 +184,39 @@ export default function MainMenuScreen() {
           Alert.alert("Error", "This game is no longer available or already in progress.");
         }
       } else {
-        Alert.alert("Error", "Game not found. Please check the code and try again.");
+        Alert.alert("Error", "Game not found.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error joining game: ", e);
-      Alert.alert("Error", "Could not join the game. Please try again.");
+      if (e.code === 'permission-denied') {
+        Alert.alert("Permission Error", "You don't have permission to access this game. Please check your connection and try again.");
+      } else if (e.code === 'unavailable') {
+        Alert.alert("Connection Error", "Firebase is unavailable. Please check your internet connection.");
+      } else {
+        Alert.alert("Error", `Could not join the game: ${e.message || 'Unknown error'}`);
+      }
     }
   };
 
   const makeGuess = async (letter: string) => {
-    if (!currentGameData || !letter.trim()) return;
-    
-    const upperLetter = letter.toUpperCase();
-    if (guessedLetters.includes(upperLetter)) {
-      Alert.alert("Already guessed", "You already guessed this letter!");
-      return;
-    }
-
     try {
+      if (!currentGameData || !letter || !letter.trim()) {
+        console.warn('Invalid game data or letter:', { currentGameData: !!currentGameData, letter });
+        return;
+      }
+      
+      if (!guessedLetters) {
+        console.warn('guessedLetters is null/undefined');
+        return;
+      }
+      
+      const upperLetter = letter.toUpperCase();
+      
+      if (guessedLetters.includes(upperLetter)) {
+        // This shouldn't happen since the letter should be disabled in the carousel
+        console.warn('Letter already guessed:', upperLetter);
+        return;
+      }
       const newGuessedLetters = [...guessedLetters, upperLetter];
       const isCorrect = currentGameData.secretWord.includes(upperLetter);
       const currentWrongCount = currentGameData.wrongGuesses || 0;
@@ -183,7 +240,6 @@ export default function MainMenuScreen() {
         guessedLetters: newGuessedLetters,
         wrongGuesses: wrongGuesses
       });
-      setCurrentGuess('');
 
       // Update database
       await updateDoc(doc(db, "games", currentGameData.id), {
@@ -225,18 +281,96 @@ export default function MainMenuScreen() {
     setGamePhase('main_menu');
     setCategory('');
     setCreatedGameId(null);
-    setJoinGameId('');
+    setAvailableGames([]);
     setCurrentGameData(null);
     setGuessedLetters([]);
-    setCurrentGuess('');
   };
 
   const goToCreateGame = () => {
     setGamePhase('choose_category');
   };
 
-  const goToJoinGame = () => {
-    setGamePhase('join_game');
+  const loadAvailableGames = async () => {
+    try {
+      console.log('Loading available games...');
+      
+      // Simplified query to avoid composite index requirement
+      const gamesQuery = query(
+        collection(db, "games"), 
+        where("status", "==", "waiting"),
+        limit(10)
+      );
+      
+      // Use onSnapshot for real-time updates but with better error handling
+      const unsubscribe = onSnapshot(gamesQuery, 
+        (snapshot) => {
+          console.log('Snapshot received, docs count:', snapshot.docs.length);
+          
+          const games = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('Game data:', { id: doc.id, category: data.category, status: data.status });
+            return {
+              id: doc.id,
+              ...data
+            };
+          })
+          // Sort by createdAt on client side
+          .sort((a: any, b: any) => {
+            if (!a.createdAt || !b.createdAt) return 0;
+            try {
+              return b.createdAt.toMillis() - a.createdAt.toMillis();
+            } catch (e) {
+              console.warn('Error sorting by timestamp:', e);
+              return 0;
+            }
+          });
+          
+          console.log('Loaded games:', games.length);
+          setAvailableGames(games);
+        }, 
+        (error) => {
+          console.error("Firebase onSnapshot error:", error);
+          console.error("Error code:", error.code);
+          console.error("Error message:", error.message);
+          
+          if (error.code === 'permission-denied') {
+            Alert.alert("Permission Error", "Access denied. Please check Firebase security rules.");
+          } else if (error.code === 'failed-precondition') {
+            Alert.alert("Index Error", "Firebase index required. Using basic query instead.");
+            // Fallback to simpler approach
+            loadGamesWithoutRealtime();
+          } else {
+            Alert.alert("Error", `Could not load games: ${error.message}`);
+          }
+        }
+      );
+      
+      // Store unsubscribe function for cleanup
+      return unsubscribe;
+    } catch (error: any) {
+      console.error("Error setting up games listener:", error);
+      Alert.alert("Error", `Setup failed: ${error.message}`);
+    }
+  };
+  
+  // Fallback method without real-time updates
+  const loadGamesWithoutRealtime = async () => {
+    try {
+      const snapshot = await getDocs(query(collection(db, "games"), where("status", "==", "waiting"), limit(10)));
+      const games = snapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAvailableGames(games);
+    } catch (error: any) {
+      console.error("Fallback load failed:", error);
+      Alert.alert("Error", "Could not load games even with fallback method.");
+    }
+  };
+
+  const goToBrowseGames = () => {
+    setGamePhase('browse_games');
+    loadAvailableGames();
   };
 
   const LanguageSwitcher = () => {
@@ -288,11 +422,23 @@ export default function MainMenuScreen() {
     return drawings[Math.min(wrongCount, 6)];
   };
 
-  if (gamePhase === 'playing_game' && currentGameData) {
+  if (gamePhase === 'playing_game' && currentGameData && currentGameData.secretWord) {
     const wrongCount = currentGameData.wrongGuesses || 0;
     const isGameOver = wrongCount >= 6;
-    const uniqueLettersInWord: string[] = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
-    const isWon = uniqueLettersInWord.every((letter: string) => guessedLetters.includes(letter));
+    
+    // Safety check for guessed letters
+    const safeGuessedLetters = guessedLetters || [];
+    
+    let isWon = false;
+    let uniqueLettersInWord: string[] = [];
+    
+    try {
+      uniqueLettersInWord = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
+      isWon = uniqueLettersInWord.every((letter: string) => safeGuessedLetters.includes(letter));
+    } catch (error) {
+      console.error('Error calculating game state:', error);
+      isWon = false;
+    }
 
     return (
       <SafeAreaView style={styles.container}>
@@ -310,33 +456,18 @@ export default function MainMenuScreen() {
         <Text style={styles.guessInfo}>Wrong guesses: {wrongCount}/6</Text>
         
         {/* Guessed Letters */}
-        {guessedLetters.length > 0 && (
+        {safeGuessedLetters.length > 0 && (
           <Text style={styles.guessedLetters}>
-            Guessed: {guessedLetters.join(', ')}
+            Guessed: {safeGuessedLetters.join(', ')}
           </Text>
         )}
 
-        {/* Guess Input - only show if game is not over */}
+        {/* Letter Carousel - only show if game is not over */}
         {!isGameOver && !isWon && (
-          <>
-            <Text style={styles.instructions}>Guess a letter:</Text>
-            <TextInput
-              style={styles.input}
-              value={currentGuess}
-              onChangeText={setCurrentGuess}
-              placeholder="Enter letter"
-              maxLength={1}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            <View style={styles.buttonWrapper}>
-              <Button 
-                title={currentGuess.trim() ? "Guess Letter" : "Enter a letter"} 
-                onPress={() => makeGuess(currentGuess)} 
-                disabled={!currentGuess.trim()} 
-              />
-            </View>
-          </>
+          <LetterCarousel 
+            guessedLetters={safeGuessedLetters} 
+            onSelectLetter={(letter) => makeGuess(letter)}
+          />
         )}
 
         {/* Back to Menu Button */}
@@ -356,33 +487,53 @@ export default function MainMenuScreen() {
           <Button title={i18n.t('createNewGame')} onPress={goToCreateGame} />
         </View>
         <View style={styles.buttonWrapper}>
-          <Button title={i18n.t('joinExistingGame')} onPress={goToJoinGame} />
+          <Button title={i18n.t('joinExistingGame')} onPress={goToBrowseGames} />
         </View>
       </SafeAreaView>
     );
   }
 
-  if (gamePhase === 'join_game') {
+  if (gamePhase === 'browse_games') {
     return (
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('title')}</Text>
-        <Text style={styles.subtitle}>{i18n.t('enterGameCode')}</Text>
-        <TextInput
-          style={styles.input}
-          value={joinGameId}
-          onChangeText={setJoinGameId}
-          placeholder="GAME CODE"
-          autoCapitalize="characters"
-          autoCorrect={false}
-          maxLength={20}
-        />
+        <Text style={styles.subtitle}>{i18n.t('availableGames')}</Text>
+        
+        {availableGames.length === 0 ? (
+          <View style={styles.noGamesContainer}>
+            <Text style={styles.noGamesText}>{i18n.t('noGamesAvailable')}</Text>
+            <Text style={styles.noGamesSubText}>{i18n.t('createFirstGame')}</Text>
+          </View>
+        ) : (
+          <View style={styles.gamesListContainer}>
+            {availableGames.map((game) => (
+              <TouchableOpacity
+                key={game.id}
+                style={styles.gameCard}
+                onPress={() => joinGame(game.id)}
+              >
+                <View style={styles.gameCardContent}>
+                  <Text style={styles.gameCardCategory}>
+                    {i18n.t('categories.' + game.category)}
+                  </Text>
+                  <Text style={styles.gameCardInfo}>
+                    {game.secretWord ? `${game.secretWord.length} letters` : 'Mystery word'}
+                  </Text>
+                  <Text style={styles.gameCardTime}>
+                    {game.createdAt && game.createdAt.toDate ? new Date(game.createdAt.toDate()).toLocaleTimeString() : 'Just now'}
+                  </Text>
+                </View>
+                <View style={styles.joinButton}>
+                  <Text style={styles.joinButtonText}>{i18n.t('joinGame')}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        
         <View style={styles.buttonWrapper}>
-          <Button 
-            title={joinGameId.trim() ? i18n.t('joinGame') : i18n.t('enterGameCode')} 
-            onPress={() => joinGame(joinGameId)} 
-            disabled={!joinGameId.trim()} 
-          />
+          <Button title={i18n.t('refreshGames')} onPress={loadAvailableGames} />
         </View>
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
@@ -556,5 +707,125 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     fontStyle: 'italic',
+  },
+  carouselContainer: {
+    width: '100%',
+    marginBottom: 30,
+    paddingVertical: 10,
+  },
+  carouselTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#333',
+  },
+  carouselScrollView: {
+    maxHeight: 80,
+  },
+  carouselContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  letterCard: {
+    backgroundColor: '#2196F3',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: '#1976D2',
+    marginHorizontal: 6,
+  },
+  letterCardDisabled: {
+    backgroundColor: '#e0e0e0',
+    borderColor: '#bdbdbd',
+    elevation: 1,
+    shadowOpacity: 0.1,
+  },
+  letterText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  letterTextDisabled: {
+    color: '#999',
+  },
+  noGamesContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  noGamesText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#666',
+  },
+  noGamesSubText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#888',
+    fontStyle: 'italic',
+  },
+  gamesListContainer: {
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  gameCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  gameCardContent: {
+    flex: 1,
+  },
+  gameCardCategory: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    marginBottom: 4,
+  },
+  gameCardInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  gameCardTime: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  joinButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  joinButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
