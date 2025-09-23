@@ -5,7 +5,6 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, whe
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
@@ -19,6 +18,10 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isAtEnd, setIsAtEnd] = useState(false);
+
+  // Safety check for props
+  const safeGuessedLetters = guessedLetters || [];
+  const safeOnSelectLetter = onSelectLetter || (() => {});
 
   // Gentle pulse animation for the scroll hint
   useEffect(() => {
@@ -54,8 +57,13 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
 
   const handleLetterPress = (letter: string) => {
     try {
-      if (guessedLetters && !guessedLetters.includes(letter) && onSelectLetter) {
-        onSelectLetter(letter);
+      if (!letter || typeof letter !== 'string') {
+        console.warn('Invalid letter:', letter);
+        return;
+      }
+      
+      if (safeGuessedLetters && !safeGuessedLetters.includes(letter) && safeOnSelectLetter) {
+        safeOnSelectLetter(letter);
         setShowScrollHint(false); // Hide hint after first interaction
       }
     } catch (error) {
@@ -64,10 +72,21 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
   };
 
   const handleScroll = (event: any) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const isAtEnd = contentOffset.x >= (contentSize.width - layoutMeasurement.width - 10);
-    setIsAtEnd(isAtEnd);
-    setShowScrollHint(false); // Hide hint when user starts scrolling
+    try {
+      if (!event || !event.nativeEvent) {
+        return;
+      }
+      
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      
+      if (contentOffset && contentSize && layoutMeasurement) {
+        const isAtEnd = contentOffset.x >= (contentSize.width - layoutMeasurement.width - 10);
+        setIsAtEnd(isAtEnd);
+        setShowScrollHint(false); // Hide hint when user starts scrolling
+      }
+    } catch (error) {
+      console.error('Error in scroll handler:', error);
+    }
   };
 
   return (
@@ -85,7 +104,8 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
           decelerationRate="fast"
         >
           {ALPHABET.map((letter) => {
-            const isGuessed = guessedLetters ? guessedLetters.includes(letter) : false;
+          try {
+            const isGuessed = safeGuessedLetters ? safeGuessedLetters.includes(letter) : false;
             return (
               <TouchableOpacity
                 key={letter}
@@ -99,18 +119,16 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
                 </Text>
               </TouchableOpacity>
             );
-          })}
+          } catch (error) {
+            console.error('Error rendering letter:', letter, error);
+            return null;
+          }
+        })}
         </ScrollView>
         
         {/* Right fade indicator - shows when there are more letters to scroll */}
         {!isAtEnd && (
-          <LinearGradient
-            colors={['transparent', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,1)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.rightFadeIndicator}
-            pointerEvents="none"
-          >
+          <View style={styles.rightFadeIndicator}>
             {showScrollHint && (
               <Animated.View 
                 style={[
@@ -124,7 +142,7 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
                 <Text style={styles.scrollHintSubText}>Scroll</Text>
               </Animated.View>
             )}
-          </LinearGradient>
+          </View>
         )}
       </View>
     </View>
@@ -388,11 +406,21 @@ export default function MainMenuScreen() {
   const createTestGame = async () => {
     try {
       console.log('Creating test game...');
+      
+      // Safe array access with fallbacks
       const testWords = ['ELEPHANT', 'GUITAR', 'RAINBOW', 'COMPUTER', 'BUTTERFLY'];
       const testCategories = ['ANIMALS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE', 'PROFESSIONS', 'COUNTRIES'];
       
+      if (!testWords || testWords.length === 0 || !testCategories || testCategories.length === 0) {
+        throw new Error('Test data arrays are invalid');
+      }
+      
       const randomWord = testWords[Math.floor(Math.random() * testWords.length)];
       const randomCategory = testCategories[Math.floor(Math.random() * testCategories.length)];
+      
+      if (!randomWord || !randomCategory) {
+        throw new Error('Failed to generate random test data');
+      }
       
       const gameData = {
         secretWord: randomWord,
@@ -403,15 +431,29 @@ export default function MainMenuScreen() {
         createdAt: serverTimestamp()
       };
 
+      console.log('Creating game with data:', gameData);
       const docRef = await addDoc(collection(db, "games"), gameData);
-      console.log('Test game created with ID:', docRef.id);
-      Alert.alert("✅ Test Game Created!", `Game ID: ${docRef.id}\nWord: ${randomWord}\nCategory: ${randomCategory}`);
       
-      // Refresh the games list
-      loadAvailableGames();
+      if (!docRef || !docRef.id) {
+        throw new Error('Failed to create game document');
+      }
+      
+      console.log('Test game created with ID:', docRef.id);
+      Alert.alert("✅ Test Game Created!", `Category: ${randomCategory}\nWord: ${randomWord}\nReady to join!`);
+      
+      // Refresh the games list after a short delay
+      setTimeout(() => {
+        try {
+          loadAvailableGames();
+        } catch (refreshError) {
+          console.error('Error refreshing games list:', refreshError);
+        }
+      }, 500);
+      
     } catch (error: any) {
       console.error('Error creating test game:', error);
-      Alert.alert("Error", `Could not create test game: ${error.message}`);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      Alert.alert("Error", `Could not create test game: ${errorMessage}`);
     }
   };
 
@@ -435,48 +477,47 @@ export default function MainMenuScreen() {
       
       // Use onSnapshot for real-time updates but with better error handling
       const unsubscribe = onSnapshot(gamesQuery, 
-        async (snapshot) => {
-          console.log('Snapshot received, docs count:', snapshot.docs.length);
-          console.log('Query was for status: waiting');
-          
-          const games = snapshot.docs.map(doc => {
-            const data = doc.data();
-            console.log('Game data:', { id: doc.id, category: data.category, status: data.status });
-            return {
-              id: doc.id,
-              ...data
-            };
-          })
-          // Sort by createdAt on client side
-          .sort((a: any, b: any) => {
-            if (!a.createdAt || !b.createdAt) return 0;
-            try {
-              return b.createdAt.toMillis() - a.createdAt.toMillis();
-            } catch (e) {
-              console.warn('Error sorting by timestamp:', e);
-              return 0;
-            }
-          });
-          
-          console.log('Loaded waiting games:', games.length);
-          
-          // If no waiting games found, let's check what games exist with other statuses
-          if (games.length === 0) {
-            console.log('No waiting games found, checking all games for debugging...');
-            try {
-              const allGamesQuery = query(collection(db, "games"), limit(10));
-              const allGamesSnapshot = await getDocs(allGamesQuery);
-              console.log('Total games in database:', allGamesSnapshot.docs.length);
-              allGamesSnapshot.docs.forEach(doc => {
+        (snapshot) => {
+          try {
+            console.log('Snapshot received, docs count:', snapshot.docs.length);
+            
+            const games = snapshot.docs.map(doc => {
+              try {
                 const data = doc.data();
-                console.log('All games - ID:', doc.id, 'Status:', data.status, 'Category:', data.category);
-              });
-            } catch (debugError) {
-              console.error('Error checking all games:', debugError);
+                console.log('Game data:', { id: doc.id, category: data.category, status: data.status });
+                return {
+                  id: doc.id,
+                  ...data
+                };
+              } catch (docError) {
+                console.error('Error processing game doc:', docError);
+                return null;
+              }
+            })
+            .filter(game => game !== null) // Remove any null entries
+            // Sort by createdAt on client side
+            .sort((a: any, b: any) => {
+              try {
+                if (!a?.createdAt || !b?.createdAt) return 0;
+                return b.createdAt.toMillis() - a.createdAt.toMillis();
+              } catch (e) {
+                console.warn('Error sorting by timestamp:', e);
+                return 0;
+              }
+            });
+            
+            console.log('Loaded waiting games:', games.length);
+            
+            // Simple debug log without nested Firebase query to avoid crashes
+            if (games.length === 0) {
+              console.log('No waiting games found - all games may be in "playing" status');
             }
+            
+            setAvailableGames(games);
+          } catch (snapshotError) {
+            console.error('Error processing snapshot:', snapshotError);
+            setAvailableGames([]); // Fallback to empty array
           }
-          
-          setAvailableGames(games);
         }, 
         (error) => {
           console.error("Firebase onSnapshot error:", error);
@@ -925,6 +966,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+    backgroundColor: 'rgba(255,255,255,0.8)',
   },
   scrollHintContainer: {
     alignItems: 'center',
