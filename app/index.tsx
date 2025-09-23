@@ -385,6 +385,36 @@ export default function MainMenuScreen() {
     setGamePhase('choose_category');
   };
 
+  const createTestGame = async () => {
+    try {
+      console.log('Creating test game...');
+      const testWords = ['ELEPHANT', 'GUITAR', 'RAINBOW', 'COMPUTER', 'BUTTERFLY'];
+      const testCategories = ['ANIMALS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE', 'PROFESSIONS', 'COUNTRIES'];
+      
+      const randomWord = testWords[Math.floor(Math.random() * testWords.length)];
+      const randomCategory = testCategories[Math.floor(Math.random() * testCategories.length)];
+      
+      const gameData = {
+        secretWord: randomWord,
+        category: randomCategory,
+        status: "waiting",
+        guessedLetters: [],
+        wrongGuesses: 0,
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, "games"), gameData);
+      console.log('Test game created with ID:', docRef.id);
+      Alert.alert("✅ Test Game Created!", `Game ID: ${docRef.id}\nWord: ${randomWord}\nCategory: ${randomCategory}`);
+      
+      // Refresh the games list
+      loadAvailableGames();
+    } catch (error: any) {
+      console.error('Error creating test game:', error);
+      Alert.alert("Error", `Could not create test game: ${error.message}`);
+    }
+  };
+
   const loadAvailableGames = async () => {
     try {
       console.log('Loading available games...');
@@ -396,7 +426,7 @@ export default function MainMenuScreen() {
         setGamesUnsubscribe(null);
       }
       
-      // Simplified query to avoid composite index requirement
+      // Query for waiting games first, then fall back to all games if none found
       const gamesQuery = query(
         collection(db, "games"), 
         where("status", "==", "waiting"),
@@ -405,8 +435,9 @@ export default function MainMenuScreen() {
       
       // Use onSnapshot for real-time updates but with better error handling
       const unsubscribe = onSnapshot(gamesQuery, 
-        (snapshot) => {
+        async (snapshot) => {
           console.log('Snapshot received, docs count:', snapshot.docs.length);
+          console.log('Query was for status: waiting');
           
           const games = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -427,7 +458,24 @@ export default function MainMenuScreen() {
             }
           });
           
-          console.log('Loaded games:', games.length);
+          console.log('Loaded waiting games:', games.length);
+          
+          // If no waiting games found, let's check what games exist with other statuses
+          if (games.length === 0) {
+            console.log('No waiting games found, checking all games for debugging...');
+            try {
+              const allGamesQuery = query(collection(db, "games"), limit(10));
+              const allGamesSnapshot = await getDocs(allGamesQuery);
+              console.log('Total games in database:', allGamesSnapshot.docs.length);
+              allGamesSnapshot.docs.forEach(doc => {
+                const data = doc.data();
+                console.log('All games - ID:', doc.id, 'Status:', data.status, 'Category:', data.category);
+              });
+            } catch (debugError) {
+              console.error('Error checking all games:', debugError);
+            }
+          }
+          
           setAvailableGames(games);
         }, 
         (error) => {
@@ -637,6 +685,9 @@ export default function MainMenuScreen() {
         
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('refreshGames')} onPress={loadAvailableGames} />
+        </View>
+        <View style={styles.buttonWrapper}>
+          <Button title="🎮 Create Test Game" onPress={createTestGame} color="#4CAF50" />
         </View>
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
