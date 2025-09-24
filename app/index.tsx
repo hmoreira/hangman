@@ -5,6 +5,79 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, whe
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
+import Svg, { Line, Circle, Path } from 'react-native-svg';
+
+// Beautiful SVG Hangman Component
+const HangmanSVG = ({ wrongCount }: { wrongCount: number }) => {
+  return (
+    <View style={styles.hangmanContainer}>
+      <Svg height="250" width="200" viewBox="0 0 200 250">
+        {/* Base */}
+        <Line x1="10" y1="230" x2="100" y2="230" stroke="#8B4513" strokeWidth="6"/>
+        
+        {/* Pole */}
+        <Line x1="30" y1="230" x2="30" y2="20" stroke="#8B4513" strokeWidth="6"/>
+        
+        {/* Top beam */}
+        <Line x1="30" y1="20" x2="120" y2="20" stroke="#8B4513" strokeWidth="6"/>
+        
+        {/* Noose */}
+        <Line x1="120" y1="20" x2="120" y2="50" stroke="#8B4513" strokeWidth="4"/>
+        
+        {/* Head (appears at 1 wrong) */}
+        {wrongCount >= 1 && (
+          <Circle cx="120" cy="65" r="15" stroke="#000" strokeWidth="3" fill="#FFE4B5"/>
+        )}
+        
+        {/* Face details (appears at 1 wrong) */}
+        {wrongCount >= 1 && (
+          <>
+            {/* Eyes */}
+            <Circle cx="115" cy="62" r="2" fill="#000"/>
+            <Circle cx="125" cy="62" r="2" fill="#000"/>
+            {/* Mouth */}
+            <Path d="M 115 70 Q 120 75 125 70" stroke="#000" strokeWidth="2" fill="none"/>
+          </>
+        )}
+        
+        {/* Body (appears at 2 wrong) */}
+        {wrongCount >= 2 && (
+          <Line x1="120" y1="80" x2="120" y2="150" stroke="#000" strokeWidth="4"/>
+        )}
+        
+        {/* Left arm (appears at 3 wrong) */}
+        {wrongCount >= 3 && (
+          <Line x1="120" y1="100" x2="90" y2="130" stroke="#000" strokeWidth="3"/>
+        )}
+        
+        {/* Right arm (appears at 4 wrong) */}
+        {wrongCount >= 4 && (
+          <Line x1="120" y1="100" x2="150" y2="130" stroke="#000" strokeWidth="3"/>
+        )}
+        
+        {/* Left leg (appears at 5 wrong) */}
+        {wrongCount >= 5 && (
+          <Line x1="120" y1="150" x2="90" y2="190" stroke="#000" strokeWidth="3"/>
+        )}
+        
+        {/* Right leg (appears at 6 wrong - game over) */}
+        {wrongCount >= 6 && (
+          <Line x1="120" y1="150" x2="150" y2="190" stroke="#000" strokeWidth="3"/>
+        )}
+        
+        {/* X eyes when dead (appears at 6 wrong) */}
+        {wrongCount >= 6 && (
+          <>
+            <Line x1="112" y1="58" x2="118" y2="66" stroke="#FF0000" strokeWidth="2"/>
+            <Line x1="118" y1="58" x2="112" y2="66" stroke="#FF0000" strokeWidth="2"/>
+            <Line x1="122" y1="58" x2="128" y2="66" stroke="#FF0000" strokeWidth="2"/>
+            <Line x1="128" y1="58" x2="122" y2="66" stroke="#FF0000" strokeWidth="2"/>
+          </>
+        )}
+      </Svg>
+    </View>
+  );
+};
 
 const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
@@ -91,7 +164,6 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
 
   return (
     <View style={styles.carouselContainer}>
-      <Text style={styles.carouselTitle}>🔤 {i18n.t('selectLetter')}</Text>
       <View style={styles.carouselWrapper}>
         <ScrollView 
           ref={scrollViewRef}
@@ -183,6 +255,9 @@ export default function MainMenuScreen() {
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
+  const [lastPlayedGameId, setLastPlayedGameId] = useState<string | null>(null);
+  const [isProcessingGuess, setIsProcessingGuess] = useState(false);
+  const [gameEndingSoundPlayed, setGameEndingSoundPlayed] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [gamesUnsubscribe, setGamesUnsubscribe] = useState<(() => void) | null>(null);
 
@@ -193,10 +268,10 @@ export default function MainMenuScreen() {
   useEffect(() => {
     async function loadSoundObject() {
       try {
-        const { sound } = await Audio.Sound.createAsync(
+        const { sound: newSound } = await Audio.Sound.createAsync(
           require('../assets/sounds/correct.mp3')
         );
-        setSound(sound);
+        setSound(newSound);
       } catch (error) {
         console.error("Couldn't load sound", error);
       }
@@ -204,7 +279,10 @@ export default function MainMenuScreen() {
     loadSoundObject();
 
     return () => {
-      sound?.unloadAsync();
+      // Clean up sound on unmount
+      if (sound) {
+        sound.unloadAsync().catch(console.error);
+      }
     };
   }, []);
 
@@ -218,28 +296,85 @@ export default function MainMenuScreen() {
     };
   }, [gamesUnsubscribe]);
 
-  // Play sound function
+  // Keep track of currently playing sound to prevent overlaps
+  const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+
+  // Play sound function with strict overlap prevention
   async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
-    if (!sound) return;
+    console.log(`Attempting to play sound: ${soundType}, isSoundPlaying: ${isSoundPlaying}`);
+    
+    // If a sound is already playing, ignore this request
+    if (isSoundPlaying) {
+      console.log(`Ignoring ${soundType} sound - another sound is already playing`);
+      return;
+    }
+    
+    setIsSoundPlaying(true);
+    
     try {
-      await sound.unloadAsync();
+      // Stop and cleanup any currently playing sound
+      if (currentSound) {
+        console.log('Stopping previous sound');
+        try {
+          await currentSound.stopAsync();
+          await currentSound.unloadAsync();
+        } catch (error) {
+          console.warn('Error stopping previous sound:', error);
+        }
+        setCurrentSound(null);
+      }
+
+      // Create a new sound object for each sound to avoid conflicts
+      let soundFile;
       switch (soundType) {
         case 'correct':
-          await sound.loadAsync(require('../assets/sounds/correct.mp3'));
+          soundFile = require('../assets/sounds/correct.mp3');
           break;
         case 'wrong':
-          await sound.loadAsync(require('../assets/sounds/wrong.mp3'));
+          soundFile = require('../assets/sounds/wrong.mp3');
           break;
         case 'win':
-          await sound.loadAsync(require('../assets/sounds/win.mp3'));
+          soundFile = require('../assets/sounds/win.mp3');
           break;
         case 'lose':
-          await sound.loadAsync(require('../assets/sounds/lose.mp3'));
+          soundFile = require('../assets/sounds/lose.mp3');
           break;
+        default:
+          console.warn(`Unknown sound type: ${soundType}`);
+          setIsSoundPlaying(false);
+          return;
       }
-      await sound.playAsync();
+
+      console.log(`Actually playing sound: ${soundType}`);
+      const { sound: newSound } = await Audio.Sound.createAsync(soundFile);
+      setCurrentSound(newSound);
+      await newSound.playAsync();
+      
+      // Clean up after playing
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          console.log(`${soundType} sound finished`);
+          newSound.unloadAsync().catch(console.error);
+          setCurrentSound(null);
+          setIsSoundPlaying(false);
+        }
+      });
+      
+      // Fallback cleanup after 3 seconds in case the status update doesn't fire
+      setTimeout(() => {
+        if (isSoundPlaying) {
+          console.log(`Fallback cleanup for ${soundType} sound`);
+          setIsSoundPlaying(false);
+          if (currentSound === newSound) {
+            setCurrentSound(null);
+          }
+        }
+      }, 3000);
+      
     } catch (error) {
-      console.error("Couldn't play sound", error);
+      console.error(`Couldn't play ${soundType} sound:`, error);
+      setIsSoundPlaying(false);
     }
   }
 
@@ -267,6 +402,14 @@ export default function MainMenuScreen() {
     }
   };
 
+  const rejoinLastGame = async () => {
+    if (!lastPlayedGameId) {
+      Alert.alert("Error", "No previous game found.");
+      return;
+    }
+    await joinGame(lastPlayedGameId);
+  };
+
   const joinGame = async (gameId: string) => {
     if (!gameId || !gameId.trim()) {
       Alert.alert("Error", "Invalid game ID.");
@@ -285,6 +428,14 @@ export default function MainMenuScreen() {
           // Store game data and start playing
           setCurrentGameData({ ...gameData, id: gameId.trim() });
           setGuessedLetters(gameData.guessedLetters || []);
+          setLastPlayedGameId(gameId.trim());
+          setGameEndingSoundPlayed(false);
+          setGamePhase('playing_game');
+        } else if (gameData.status === "playing" && gameId.trim() === lastPlayedGameId) {
+          // Allow rejoining if this is the last game the player was in
+          setCurrentGameData({ ...gameData, id: gameId.trim() });
+          setGuessedLetters(gameData.guessedLetters || []);
+          setGameEndingSoundPlayed(false);
           setGamePhase('playing_game');
         } else {
           Alert.alert("Error", "This game is no longer available or already in progress.");
@@ -305,14 +456,25 @@ export default function MainMenuScreen() {
   };
 
   const makeGuess = async (letter: string) => {
+    console.log(`makeGuess called with: ${letter}`);
+    
+    if (isProcessingGuess) {
+      console.log('Already processing a guess, ignoring...');
+      return;
+    }
+    
+    setIsProcessingGuess(true);
+    
     try {
       if (!currentGameData || !letter || !letter.trim()) {
         console.warn('Invalid game data or letter:', { currentGameData: !!currentGameData, letter });
+        setIsProcessingGuess(false);
         return;
       }
       
       if (!guessedLetters) {
         console.warn('guessedLetters is null/undefined');
+        setIsProcessingGuess(false);
         return;
       }
       
@@ -321,6 +483,7 @@ export default function MainMenuScreen() {
       if (guessedLetters.includes(upperLetter)) {
         // This shouldn't happen since the letter should be disabled in the carousel
         console.warn('Letter already guessed:', upperLetter);
+        setIsProcessingGuess(false);
         return;
       }
       const newGuessedLetters = [...guessedLetters, upperLetter];
@@ -331,13 +494,6 @@ export default function MainMenuScreen() {
         currentWrongCount + 1;
 
       console.log(`Guess: ${upperLetter}, Correct: ${isCorrect}, Wrong count: ${currentWrongCount} -> ${wrongGuesses}`);
-
-      // Play sound for correct or wrong guess
-      if (isCorrect) {
-        playSound('correct');
-      } else {
-        playSound('wrong');
-      }
 
       // Update local state
       setGuessedLetters(newGuessedLetters);
@@ -353,7 +509,7 @@ export default function MainMenuScreen() {
         wrongGuesses: wrongGuesses
       });
 
-      // Check win/lose conditions
+      // Check win/lose conditions first
       const uniqueLettersInWord: string[] = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
       const allLettersGuessed = uniqueLettersInWord.every((letter: string) => newGuessedLetters.includes(letter));
       
@@ -362,17 +518,34 @@ export default function MainMenuScreen() {
       console.log(`Guessed letters: ${newGuessedLetters.join(', ')}`);
       console.log(`All letters guessed: ${allLettersGuessed}`);
       
+      // Play appropriate sound based on game state
       if (allLettersGuessed) {
+        console.log('Game won - playing win sound');
+        setGameEndingSoundPlayed(true);
         playSound('win');
         Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
       } else if (wrongGuesses >= 6) {
+        console.log('Game lost - playing lose sound');
+        setGameEndingSoundPlayed(true);
         playSound('lose');
         Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
+      } else if (!gameEndingSoundPlayed) {
+        // Game continues - play sound for this individual guess ONLY if no game-ending sound was played
+        console.log(`Game continues - playing ${isCorrect ? 'correct' : 'wrong'} sound`);
+        if (isCorrect) {
+          playSound('correct');
+        } else {
+          playSound('wrong');
+        }
+      } else {
+        console.log('Skipping individual guess sound - game ending sound already played');
       }
 
     } catch (e) {
       console.error("Error making guess: ", e);
       Alert.alert("Error", "Could not submit guess. Please try again.");
+    } finally {
+      setIsProcessingGuess(false);
     }
   };
 
@@ -397,6 +570,7 @@ export default function MainMenuScreen() {
     setAvailableGames([]);
     setCurrentGameData(null);
     setGuessedLetters([]);
+    // Don't clear lastPlayedGameId - we want to keep it for rejoining
   };
 
   const goToCreateGame = () => {
@@ -599,20 +773,7 @@ export default function MainMenuScreen() {
       .join(' ');
   };
 
-  // Helper function to get hangman drawing
-  const getHangmanDrawing = (wrongCount: number) => {
-    console.log(`Drawing hangman for wrong count: ${wrongCount}`);
-    const drawings = [
-      "",  // 0 wrong
-      "  +---+\n  |   |\n  O   |\n      |\n      |\n      |\n=========", // 1 - Head
-      "  +---+\n  |   |\n  O   |\n  |   |\n      |\n      |\n=========", // 2 - Body
-      "  +---+\n  |   |\n  O   |\n /|   |\n      |\n      |\n=========", // 3 - Left arm
-      "  +---+\n  |   |\n  O   |\n /|\\  |\n      |\n      |\n=========", // 4 - Right arm
-      "  +---+\n  |   |\n  O   |\n /|\\  |\n /    |\n      |\n=========", // 5 - Left leg
-      "  +---+\n  |   |\n  O   |\n /|\\  |\n / \\  |\n      |\n========="  // 6 - Right leg (dead)
-    ];
-    return drawings[Math.min(wrongCount, 6)];
-  };
+
 
   if (gamePhase === 'playing_game' && currentGameData && currentGameData.secretWord) {
     const wrongCount = currentGameData.wrongGuesses || 0;
@@ -635,24 +796,12 @@ export default function MainMenuScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
-        <Text style={styles.title}>{i18n.t('title')}</Text>
-        <Text style={styles.subtitle}>Category: {i18n.t('categories.' + currentGameData.category as any)}</Text>
         
-        {/* Hangman Drawing */}
-        <Text style={styles.hangmanDrawing}>{getHangmanDrawing(wrongCount)}</Text>
+        {/* Beautiful SVG Hangman - Now the star of the show! */}
+        <HangmanSVG wrongCount={wrongCount} />
         
         {/* Word Display */}
         <Text style={styles.wordDisplay}>{displayWord()}</Text>
-        
-        {/* Wrong Guesses Count */}
-        <Text style={styles.guessInfo}>Wrong guesses: {wrongCount}/6</Text>
-        
-        {/* Guessed Letters */}
-        {safeGuessedLetters.length > 0 && (
-          <Text style={styles.guessedLetters}>
-            Guessed: {safeGuessedLetters.join(', ')}
-          </Text>
-        )}
 
         {/* Letter Carousel - only show if game is not over */}
         {!isGameOver && !isWon && (
@@ -675,6 +824,11 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('title')}</Text>
+        {lastPlayedGameId && (
+          <View style={styles.buttonWrapper}>
+            <Button title={i18n.t('continueGame')} onPress={rejoinLastGame} color="#4CAF50" />
+          </View>
+        )}
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('createNewGame')} onPress={goToCreateGame} />
         </View>
@@ -873,14 +1027,31 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     textAlign: 'center',
   },
+  hangmanContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 30,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
   hangmanDrawing: {
-    fontSize: 12,
+    fontSize: 18,
     fontFamily: 'monospace',
     backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
+    padding: 20,
+    borderRadius: 8,
+    marginVertical: 30,
     textAlign: 'center',
+    minHeight: 200,
   },
   wordDisplay: {
     fontSize: 32,
