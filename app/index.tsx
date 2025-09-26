@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
-import { db } from '@/firebaseConfig';
-import i18n from '@/i18n';
+import { db } from '../firebaseConfig';
+import i18n from '../i18n';
 import { Audio } from 'expo-av';
 import Svg, { Line, Circle, Path } from 'react-native-svg';
 
@@ -298,7 +298,10 @@ export default function MainMenuScreen() {
   const [gamesUnsubscribe, setGamesUnsubscribe] = useState<(() => void) | null>(null);
 
   // This state is our single source of truth.
-  const [locale, setLocale] = useState(i18n.locale);
+  const [locale, setLocale] = useState(() => {
+    console.log('🚀 Initializing locale state - i18n.locale:', i18n.locale);
+    return i18n.locale;
+  });
 
   // Helper function to get the correct word list based on current language
   const getCategoryWords = () => {
