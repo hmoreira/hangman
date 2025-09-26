@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
@@ -229,9 +229,13 @@ const WordInputScreen = ({ category, onSubmit, onBack }: { category: string, onS
       <Text style={styles.subtitle}>{i18n.t('categories.' + category as any)}</Text>
       <Text style={styles.instructions}>{i18n.t('enterAWord')}</Text>
       <TextInput
-        style={styles.input} value={word} onChangeText={setWord}
-        placeholder="SECRET WORD" autoCapitalize="characters"
-        autoCorrect={false} maxLength={20}
+        style={styles.input} 
+        value={word} 
+        onChangeText={(text) => setWord(text.toUpperCase())}
+        placeholder="SECRET WORD" 
+        autoCapitalize="characters"
+        autoCorrect={false} 
+        maxLength={20}
       />
       <View style={styles.buttonWrapper}>
         <Button 
@@ -300,31 +304,32 @@ export default function MainMenuScreen() {
   const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
   const [isSoundPlaying, setIsSoundPlaying] = useState(false);
 
-  // Play sound function with strict overlap prevention
-  async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
-    console.log(`Attempting to play sound: ${soundType}, isSoundPlaying: ${isSoundPlaying}`);
-    
-    // If a sound is already playing, ignore this request
-    if (isSoundPlaying) {
-      console.log(`Ignoring ${soundType} sound - another sound is already playing`);
-      return;
+  // Manual reset function for debugging sound issues
+  const resetSoundSystem = () => {
+    console.log('Manually resetting sound system');
+    if (currentSound) {
+      currentSound.unloadAsync().catch(console.error);
     }
-    
-    setIsSoundPlaying(true);
+    setCurrentSound(null);
+    setIsSoundPlaying(false);
+  };
+
+  // Delete game from database when completed
+  const deleteCompletedGame = async (gameId: string) => {
+    try {
+      console.log(`Deleting completed game: ${gameId}`);
+      await deleteDoc(doc(db, "games", gameId));
+      console.log(`✅ Game ${gameId} deleted successfully`);
+    } catch (error) {
+      console.error(`❌ Error deleting game ${gameId}:`, error);
+    }
+  };
+
+  // Simplified sound system to avoid blocking issues
+  async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
+    console.log(`🔊 Playing sound: ${soundType}`);
     
     try {
-      // Stop and cleanup any currently playing sound
-      if (currentSound) {
-        console.log('Stopping previous sound');
-        try {
-          await currentSound.stopAsync();
-          await currentSound.unloadAsync();
-        } catch (error) {
-          console.warn('Error stopping previous sound:', error);
-        }
-        setCurrentSound(null);
-      }
-
       // Create a new sound object for each sound to avoid conflicts
       let soundFile;
       switch (soundType) {
@@ -342,39 +347,27 @@ export default function MainMenuScreen() {
           break;
         default:
           console.warn(`Unknown sound type: ${soundType}`);
-          setIsSoundPlaying(false);
           return;
       }
 
-      console.log(`Actually playing sound: ${soundType}`);
       const { sound: newSound } = await Audio.Sound.createAsync(soundFile);
-      setCurrentSound(newSound);
-      await newSound.playAsync();
       
-      // Clean up after playing
+      // Play the sound
+      await newSound.playAsync();
+      console.log(`✅ ${soundType} sound started successfully`);
+      
+      // Set up cleanup when finished
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
-          console.log(`${soundType} sound finished`);
-          newSound.unloadAsync().catch(console.error);
-          setCurrentSound(null);
-          setIsSoundPlaying(false);
+          console.log(`🎵 ${soundType} sound finished, cleaning up`);
+          newSound.unloadAsync().catch((error) => {
+            console.warn(`Error unloading ${soundType} sound:`, error);
+          });
         }
       });
       
-      // Fallback cleanup after 3 seconds in case the status update doesn't fire
-      setTimeout(() => {
-        if (isSoundPlaying) {
-          console.log(`Fallback cleanup for ${soundType} sound`);
-          setIsSoundPlaying(false);
-          if (currentSound === newSound) {
-            setCurrentSound(null);
-          }
-        }
-      }, 3000);
-      
     } catch (error) {
-      console.error(`Couldn't play ${soundType} sound:`, error);
-      setIsSoundPlaying(false);
+      console.error(`❌ Error playing ${soundType} sound:`, error);
     }
   }
 
@@ -524,11 +517,17 @@ export default function MainMenuScreen() {
         setGameEndingSoundPlayed(true);
         playSound('win');
         Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
+        // Delete the completed game from database and clear last played game
+        deleteCompletedGame(currentGameData.id);
+        setLastPlayedGameId(null);
       } else if (wrongGuesses >= 6) {
         console.log('Game lost - playing lose sound');
         setGameEndingSoundPlayed(true);
         playSound('lose');
         Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
+        // Delete the completed game from database and clear last played game
+        deleteCompletedGame(currentGameData.id);
+        setLastPlayedGameId(null);
       } else if (!gameEndingSoundPlayed) {
         // Game continues - play sound for this individual guess ONLY if no game-ending sound was played
         console.log(`Game continues - playing ${isCorrect ? 'correct' : 'wrong'} sound`);
@@ -570,6 +569,8 @@ export default function MainMenuScreen() {
     setAvailableGames([]);
     setCurrentGameData(null);
     setGuessedLetters([]);
+    // Reset sound system when returning to menu
+    resetSoundSystem();
     // Don't clear lastPlayedGameId - we want to keep it for rejoining
   };
 
@@ -896,8 +897,6 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('gameCreated')}</Text>
-        <Text style={styles.subtitle}>{i18n.t('shareCode')}</Text>
-        <Text style={styles.gameIdText}>{createdGameId}</Text>
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('createAnotherGame')} onPress={resetToMainMenu} />
         </View>
