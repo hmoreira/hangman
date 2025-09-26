@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "hangman",
+    "name": "Hangman",
     "slug": "hangman",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,16 +11,18 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#4a90e2"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#4a90e2"
       },
+      "versionCode": 1,
+      "package": "com.hmoreira.hangman",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -35,6 +37,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7e51b1cc-ba08-458f-a459-b335a20d0119"
+      }
+    },
+    "owner": "hmoreira"
   }
 }

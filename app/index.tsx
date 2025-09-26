@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
@@ -85,7 +85,7 @@ const CATEGORIES = [
 ];
 
 // Word lists for automatic game generation
-const CATEGORY_WORDS = {
+const CATEGORY_WORDS_EN = {
   ANIMALS: ['ELEPHANT', 'GIRAFFE', 'PENGUIN', 'KANGAROO', 'BUTTERFLY', 'OCTOPUS', 'CHEETAH', 'RHINOCEROS', 'FLAMINGO', 'CROCODILE'],
   CITIES: ['PARIS', 'TOKYO', 'LONDON', 'NEW YORK', 'BARCELONA', 'SYDNEY', 'ROME', 'AMSTERDAM', 'DUBAI', 'SINGAPORE'],
   FRUITS: ['PINEAPPLE', 'STRAWBERRY', 'WATERMELON', 'BLUEBERRY', 'POMEGRANATE', 'KIWI', 'MANGO', 'PAPAYA', 'COCONUT', 'AVOCADO'],
@@ -97,6 +97,21 @@ const CATEGORY_WORDS = {
   MUSICAL_INSTRUMENTS: ['PIANO', 'GUITAR', 'VIOLIN', 'DRUMS', 'SAXOPHONE', 'TRUMPET', 'FLUTE', 'HARMONICA', 'ACCORDION', 'BANJO'],
   THINGS_IN_A_HOUSE: ['REFRIGERATOR', 'TELEVISION', 'MICROWAVE', 'SOFA', 'BOOKSHELF', 'MIRROR', 'CARPET', 'CHANDELIER', 'FIREPLACE', 'DISHWASHER']
 };
+
+const CATEGORY_WORDS_PT = {
+  ANIMALS: ['ELEFANTE', 'GIRAFA', 'PINGUIM', 'CANGURU', 'BORBOLETA', 'POLVO', 'GUEPARDO', 'RINOCERONTE', 'FLAMINGO', 'CROCODILO'],
+  CITIES: ['PARIS', 'TOQUIO', 'LONDRES', 'NOVA YORK', 'BARCELONA', 'SIDNEY', 'ROMA', 'AMSTERDA', 'DUBAI', 'SINGAPURA'],
+  FRUITS: ['ABACAXI', 'MORANGO', 'MELANCIA', 'MIRTILO', 'ROMA', 'KIWI', 'MANGA', 'MAMAO', 'COCO', 'ABACATE'],
+  COUNTRIES: ['BRASIL', 'AUSTRALIA', 'CANADA', 'ALEMANHA', 'ARGENTINA', 'TAILANDIA', 'PORTUGAL', 'SUECIA', 'MARROCOS', 'ISLANDIA'],
+  PROFESSIONS: ['MEDICO', 'PROFESSOR', 'ENGENHEIRO', 'ARQUITETO', 'FOTOGRAFO', 'MUSICO', 'BOMBEIRO', 'ASTRONAUTA', 'CHEF', 'ADVOGADO'],
+  MOVIES: ['TITANIC', 'AVATAR', 'ORIGEM', 'GLADIADOR', 'CASABLANCA', 'ROCKY', 'TUBARAO', 'SUPERMAN', 'BATMAN', 'HOMEM ARANHA'],
+  SPORTS: ['BASQUETE', 'VOLEI', 'NATACAO', 'TENIS', 'BEISEBOL', 'HOCKEY', 'GOLFE', 'ESQUI', 'SURF', 'BOXE'],
+  FAMOUS_BRANDS: ['COCA COLA', 'MCDONALDS', 'NIKE', 'APPLE', 'SAMSUNG', 'TOYOTA', 'MICROSOFT', 'GOOGLE', 'AMAZON', 'FACEBOOK'],
+  MUSICAL_INSTRUMENTS: ['PIANO', 'VIOLAO', 'VIOLINO', 'BATERIA', 'SAXOFONE', 'TROMPETE', 'FLAUTA', 'GAITA', 'ACORDEAO', 'BANJO'],
+  THINGS_IN_A_HOUSE: ['GELADEIRA', 'TELEVISAO', 'MICROONDAS', 'SOFA', 'ESTANTE', 'ESPELHO', 'TAPETE', 'LUSTRE', 'LAREIRA', 'LAVAVAJILLA']
+};
+
+
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -285,6 +300,18 @@ export default function MainMenuScreen() {
   // This state is our single source of truth.
   const [locale, setLocale] = useState(i18n.locale);
 
+  // Helper function to get the correct word list based on current language
+  const getCategoryWords = () => {
+    console.log('🌍 getCategoryWords called - component locale state:', locale);
+    console.log('🌍 getCategoryWords called - i18n.locale:', i18n.locale);
+    
+    // Use the component's locale state as the primary source
+    const currentLocale = locale || 'pt';
+    const wordList = currentLocale === 'pt' ? CATEGORY_WORDS_PT : CATEGORY_WORDS_EN;
+    console.log('🌍 Selected word list:', currentLocale === 'pt' ? 'PORTUGUESE' : 'ENGLISH');
+    return wordList;
+  };
+
   // Load and cleanup sound
   useEffect(() => {
     async function loadSoundObject() {
@@ -351,10 +378,12 @@ export default function MainMenuScreen() {
       const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
       
       // Pick a random word from that category
-      const categoryWords = CATEGORY_WORDS[randomCategory as keyof typeof CATEGORY_WORDS];
+      const currentWordList = getCategoryWords();
+      const categoryWords = currentWordList[randomCategory as keyof typeof currentWordList];
       const randomWord = categoryWords[Math.floor(Math.random() * categoryWords.length)];
       
       console.log(`🎯 Generated game: ${randomCategory} - ${randomWord}`);
+      console.log(`🎯 Language was: ${i18n.locale}, word list: ${i18n.locale === 'pt' ? 'PT' : 'EN'}`);
       
       // Create the game in database
       const gameDocRef = await addDoc(collection(db, "games"), {
@@ -435,7 +464,8 @@ export default function MainMenuScreen() {
         console.log('🔄 Regenerating word for new language...');
         
         // Get a new word from the same category
-        const categoryWords = CATEGORY_WORDS[currentGameData.category as keyof typeof CATEGORY_WORDS];
+        const currentWordList = getCategoryWords();
+        const categoryWords = currentWordList[currentGameData.category as keyof typeof currentWordList];
         const newWord = categoryWords[Math.floor(Math.random() * categoryWords.length)];
         
         console.log(`🎯 New word for ${currentGameData.category}: ${newWord}`);
