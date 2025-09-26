@@ -1,5 +1,6 @@
 {
   "title": "Me Enforque",
+  "welcomeMessage": "Adivinhe a palavra, letra por letra!",
   "chooseCategory": "Jogador 1: Escolha uma Categoria",
   "enterAWord": "Jogador 1, digite uma palavra secreta:",
   "createGame": "Criar Jogo",

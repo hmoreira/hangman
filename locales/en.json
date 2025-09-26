@@ -1,5 +1,6 @@
 {
   "title": "Hang Me",
+  "welcomeMessage": "Guess the word, letter by letter!",
   "chooseCategory": "Player 1: Choose a Category",
   "enterAWord": "Player 1, enter a secret word:",
   "createGame": "Create Game",

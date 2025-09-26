@@ -21,10 +21,10 @@ const locales = getLocales();
 // --- END DEBUGGING ---
 
 // Set the locale once at the beginning of your app.
-i18n.locale = 'en'; // Force the app to always start in English
+i18n.locale = 'pt'; // Force the app to always start in Portuguese
 
 // When a value is missing from a language it'll fallback to another language.
 i18n.enableFallback = true;
-i18n.defaultLocale = 'en';
+i18n.defaultLocale = 'pt';
 
 export default i18n;

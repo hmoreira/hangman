@@ -423,11 +423,41 @@ export default function MainMenuScreen() {
   }
 
   // This function updates both our state AND the i18n locale.
-  const changeLocale = (newLocale: string) => {
+  const changeLocale = async (newLocale: string) => {
     console.log('Changing locale to:', newLocale);
     i18n.locale = newLocale;
     setLocale(newLocale);
     console.log('After change - i18n.locale:', i18n.locale, 'state locale:', newLocale);
+    
+    // If user is in a game and hasn't made any guesses yet, regenerate the word
+    if (gamePhase === 'playing_game' && currentGameData && (!guessedLetters || guessedLetters.length === 0)) {
+      try {
+        console.log('🔄 Regenerating word for new language...');
+        
+        // Get a new word from the same category
+        const categoryWords = CATEGORY_WORDS[currentGameData.category as keyof typeof CATEGORY_WORDS];
+        const newWord = categoryWords[Math.floor(Math.random() * categoryWords.length)];
+        
+        console.log(`🎯 New word for ${currentGameData.category}: ${newWord}`);
+        
+        // Update the game in the database
+        await updateDoc(doc(db, "games", currentGameData.id), {
+          secretWord: newWord
+        });
+        
+        // Update local game state
+        setCurrentGameData({
+          ...currentGameData,
+          secretWord: newWord
+        });
+        
+        console.log('✅ Word regenerated successfully');
+        
+      } catch (error) {
+        console.error('❌ Error regenerating word:', error);
+        // Don't show an alert here as language change should still work
+      }
+    }
   };
   
   const createOnlineGame = async (word: string, category: string) => {
@@ -629,60 +659,6 @@ export default function MainMenuScreen() {
     setGamePhase('choose_category');
   };
 
-  const createTestGame = async () => {
-    try {
-      console.log('Creating test game...');
-      
-      // Safe array access with fallbacks
-      const testWords = ['ELEPHANT', 'GUITAR', 'RAINBOW', 'COMPUTER', 'BUTTERFLY'];
-      const testCategories = ['ANIMALS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE', 'PROFESSIONS', 'COUNTRIES'];
-      
-      if (!testWords || testWords.length === 0 || !testCategories || testCategories.length === 0) {
-        throw new Error('Test data arrays are invalid');
-      }
-      
-      const randomWord = testWords[Math.floor(Math.random() * testWords.length)];
-      const randomCategory = testCategories[Math.floor(Math.random() * testCategories.length)];
-      
-      if (!randomWord || !randomCategory) {
-        throw new Error('Failed to generate random test data');
-      }
-      
-      const gameData = {
-        secretWord: randomWord,
-        category: randomCategory,
-        status: "waiting",
-        guessedLetters: [],
-        wrongGuesses: 0,
-        createdAt: serverTimestamp()
-      };
-
-      console.log('Creating game with data:', gameData);
-      const docRef = await addDoc(collection(db, "games"), gameData);
-      
-      if (!docRef || !docRef.id) {
-        throw new Error('Failed to create game document');
-      }
-      
-      console.log('Test game created with ID:', docRef.id);
-      Alert.alert("✅ Test Game Created!", `Category: ${randomCategory}\nWord: ${randomWord}\nReady to join!`);
-      
-      // Refresh the games list after a short delay
-      setTimeout(() => {
-        try {
-          loadAvailableGames();
-        } catch (refreshError) {
-          console.error('Error refreshing games list:', refreshError);
-        }
-      }, 500);
-      
-    } catch (error: any) {
-      console.error('Error creating test game:', error);
-      const errorMessage = error?.message || 'Unknown error occurred';
-      Alert.alert("Error", `Could not create test game: ${errorMessage}`);
-    }
-  };
-
   const loadAvailableGames = async () => {
     try {
       console.log('Loading available games...');
@@ -849,25 +825,27 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         
-        {/* Category Display */}
-        <Text style={styles.categoryDisplay}>{i18n.t('categories.' + currentGameData.category as any)}</Text>
-        
-        {/* Beautiful SVG Hangman - Now the star of the show! */}
-        <HangmanSVG wrongCount={wrongCount} />
-        
-        {/* Word Display */}
-        <Text style={styles.wordDisplay}>{displayWord()}</Text>
+        <View style={styles.gameContent}>
+          {/* Category Display */}
+          <Text style={styles.categoryDisplay}>{i18n.t('categories.' + currentGameData.category as any)}</Text>
+          
+          {/* Beautiful SVG Hangman - Now the star of the show! */}
+          <HangmanSVG wrongCount={wrongCount} />
+          
+          {/* Word Display */}
+          <Text style={styles.wordDisplay}>{displayWord()}</Text>
 
-        {/* Letter Carousel - only show if game is not over */}
-        {!isGameOver && !isWon && (
-          <LetterCarousel 
-            guessedLetters={safeGuessedLetters} 
-            onSelectLetter={(letter) => makeGuess(letter)}
-          />
-        )}
+          {/* Letter Carousel - only show if game is not over */}
+          {!isGameOver && !isWon && (
+            <LetterCarousel 
+              guessedLetters={safeGuessedLetters} 
+              onSelectLetter={(letter) => makeGuess(letter)}
+            />
+          )}
+        </View>
 
-        {/* Back to Menu Button */}
-        <View style={styles.buttonWrapper}>
+        {/* Back to Menu Button - stuck to bottom */}
+        <View style={styles.bottomButtonWrapper}>
           <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
         </View>
       </SafeAreaView>
@@ -876,19 +854,35 @@ export default function MainMenuScreen() {
 
   if (gamePhase === 'main_menu') {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.mainMenuContainer}>
         <LanguageSwitcher />
-        <Text style={styles.title}>{i18n.t('title')}</Text>
-        {lastPlayedGameId && (
-          <View style={styles.buttonWrapper}>
-            <Button title={i18n.t('continueGame')} onPress={rejoinLastGame} color="#4CAF50" />
-          </View>
-        )}
-        <View style={styles.buttonWrapper}>
-          <Button title={i18n.t('createNewGame')} onPress={goToCreateGame} />
+        
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <Text style={styles.mainTitle}>{i18n.t('title')}</Text>
+          <Text style={styles.subtitle}>{i18n.t('welcomeMessage') || 'Guess the word, letter by letter!'}</Text>
         </View>
-        <View style={styles.buttonWrapper}>
-          <Button title={i18n.t('joinExistingGame')} onPress={goToBrowseGames} />
+
+        {/* Main Content */}
+        <View style={styles.menuContent}>
+          {lastPlayedGameId && (
+            <TouchableOpacity style={styles.primaryButton} onPress={rejoinLastGame}>
+              <Text style={styles.primaryButtonText}>🔄 {i18n.t('continueGame')}</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity style={styles.menuButton} onPress={goToCreateGame}>
+            <Text style={styles.menuButtonText}>✨ {i18n.t('createNewGame')}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.menuButton} onPress={goToBrowseGames}>
+            <Text style={styles.menuButtonText}>🎯 {i18n.t('joinExistingGame')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>✨ Challenge your vocabulary! ✨</Text>
         </View>
       </SafeAreaView>
     );
@@ -950,9 +944,6 @@ export default function MainMenuScreen() {
           <Button title={i18n.t('refreshGames')} onPress={loadAvailableGames} />
         </View>
         <View style={styles.buttonWrapper}>
-          <Button title="🎮 Create Test Game" onPress={createTestGame} color="#4CAF50" />
-        </View>
-        <View style={styles.buttonWrapper}>
           <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
         </View>
       </SafeAreaView>
@@ -965,7 +956,7 @@ export default function MainMenuScreen() {
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('gameCreated')}</Text>
         <View style={styles.buttonWrapper}>
-          <Button title={i18n.t('createAnotherGame')} onPress={resetToMainMenu} />
+          <Button title={i18n.t('backToMenu')} onPress={resetToMainMenu} color="#888" />
         </View>
       </SafeAreaView>
     );
@@ -1026,7 +1017,7 @@ const styles = StyleSheet.create({
   },
   languageSwitcher: {
     position: 'absolute',
-    top: 20,
+    top: 60,
     right: 20,
     flexDirection: 'row',
     zIndex: 1, // Ensure it's above other elements
@@ -1049,8 +1040,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2196F3',
     textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 25,
+    marginTop: 100,
+    marginBottom: 5,
     backgroundColor: '#E3F2FD',
     paddingVertical: 8,
     paddingHorizontal: 20,
@@ -1109,7 +1100,8 @@ const styles = StyleSheet.create({
   hangmanContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 30,
+    marginTop: 30,
+    marginBottom: 0,
     backgroundColor: 'transparent',
     borderRadius: 15,
     padding: 20,
@@ -1292,5 +1284,93 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  // Main Menu Styles
+  mainMenuContainer: {
+    flex: 1,
+    backgroundColor: '#4a90e2',
+    paddingTop: 50,
+    paddingBottom: 30,
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginTop: 60,
+    marginBottom: 40,
+  },
+  mainTitle: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    textAlign: 'center',
+    marginBottom: 10,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  menuContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  primaryButton: {
+    backgroundColor: '#27ae60',
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    marginBottom: 20,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  menuButton: {
+    backgroundColor: '#3498db',
+    paddingVertical: 14,
+    paddingHorizontal: 35,
+    borderRadius: 25,
+    marginBottom: 15,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  menuButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: 30,
+    marginBottom: 20,
+  },
+  footerText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  gameContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  bottomButtonWrapper: {
+    marginBottom: 10,
+    marginTop: 10,
+    width: 250,
+    alignSelf: 'center',
   },
 });
