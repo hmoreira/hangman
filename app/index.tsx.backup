@@ -1,102 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db } from '../firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
-import Svg, { Line, Circle, Path } from 'react-native-svg';
-
-// Beautiful SVG Hangman Component
-const HangmanSVG = ({ wrongCount }: { wrongCount: number }) => {
-  return (
-    <View style={styles.hangmanContainer}>
-      <Svg height="250" width="200" viewBox="0 0 200 250">
-        {/* Base */}
-        <Line x1="10" y1="230" x2="100" y2="230" stroke="#8B4513" strokeWidth="6"/>
-        
-        {/* Pole */}
-        <Line x1="30" y1="230" x2="30" y2="20" stroke="#8B4513" strokeWidth="6"/>
-        
-        {/* Top beam */}
-        <Line x1="30" y1="20" x2="120" y2="20" stroke="#8B4513" strokeWidth="6"/>
-        
-        {/* Noose */}
-        <Line x1="120" y1="20" x2="120" y2="50" stroke="#8B4513" strokeWidth="4"/>
-        
-        {/* Head (appears at 1 wrong) */}
-        {wrongCount >= 1 && (
-          <Circle cx="120" cy="65" r="15" stroke="#000" strokeWidth="3" fill="#FFE4B5"/>
-        )}
-        
-        {/* Face details (appears at 1 wrong) */}
-        {wrongCount >= 1 && (
-          <>
-            {/* Eyes */}
-            <Circle cx="115" cy="62" r="2" fill="#000"/>
-            <Circle cx="125" cy="62" r="2" fill="#000"/>
-            {/* Mouth */}
-            <Path d="M 115 70 Q 120 75 125 70" stroke="#000" strokeWidth="2" fill="none"/>
-          </>
-        )}
-        
-        {/* Body (appears at 2 wrong) */}
-        {wrongCount >= 2 && (
-          <Line x1="120" y1="80" x2="120" y2="150" stroke="#000" strokeWidth="4"/>
-        )}
-        
-        {/* Left arm (appears at 3 wrong) */}
-        {wrongCount >= 3 && (
-          <Line x1="120" y1="100" x2="90" y2="130" stroke="#000" strokeWidth="3"/>
-        )}
-        
-        {/* Right arm (appears at 4 wrong) */}
-        {wrongCount >= 4 && (
-          <Line x1="120" y1="100" x2="150" y2="130" stroke="#000" strokeWidth="3"/>
-        )}
-        
-        {/* Left leg (appears at 5 wrong) */}
-        {wrongCount >= 5 && (
-          <Line x1="120" y1="150" x2="90" y2="190" stroke="#000" strokeWidth="3"/>
-        )}
-        
-        {/* Right leg (appears at 6 wrong - game over) */}
-        {wrongCount >= 6 && (
-          <Line x1="120" y1="150" x2="150" y2="190" stroke="#000" strokeWidth="3"/>
-        )}
-        
-        {/* X eyes when dead (appears at 6 wrong) */}
-        {wrongCount >= 6 && (
-          <>
-            <Line x1="112" y1="58" x2="118" y2="66" stroke="#FF0000" strokeWidth="2"/>
-            <Line x1="118" y1="58" x2="112" y2="66" stroke="#FF0000" strokeWidth="2"/>
-            <Line x1="122" y1="58" x2="128" y2="66" stroke="#FF0000" strokeWidth="2"/>
-            <Line x1="128" y1="58" x2="122" y2="66" stroke="#FF0000" strokeWidth="2"/>
-          </>
-        )}
-      </Svg>
-    </View>
-  );
-};
 
 const CATEGORIES = [
   'ANIMALS', 'CITIES', 'FRUITS', 'COUNTRIES', 'PROFESSIONS', 'MOVIES',
   'SPORTS', 'FAMOUS_BRANDS', 'MUSICAL_INSTRUMENTS', 'THINGS_IN_A_HOUSE',
 ];
-
-// Word lists for automatic game generation
-const CATEGORY_WORDS = {
-  ANIMALS: ['ELEPHANT', 'GIRAFFE', 'PENGUIN', 'KANGAROO', 'BUTTERFLY', 'OCTOPUS', 'CHEETAH', 'RHINOCEROS', 'FLAMINGO', 'CROCODILE'],
-  CITIES: ['PARIS', 'TOKYO', 'LONDON', 'NEW YORK', 'BARCELONA', 'SYDNEY', 'ROME', 'AMSTERDAM', 'DUBAI', 'SINGAPORE'],
-  FRUITS: ['PINEAPPLE', 'STRAWBERRY', 'WATERMELON', 'BLUEBERRY', 'POMEGRANATE', 'KIWI', 'MANGO', 'PAPAYA', 'COCONUT', 'AVOCADO'],
-  COUNTRIES: ['BRAZIL', 'AUSTRALIA', 'CANADA', 'GERMANY', 'ARGENTINA', 'THAILAND', 'PORTUGAL', 'SWEDEN', 'MOROCCO', 'ICELAND'],
-  PROFESSIONS: ['DOCTOR', 'TEACHER', 'ENGINEER', 'ARCHITECT', 'PHOTOGRAPHER', 'MUSICIAN', 'FIREFIGHTER', 'ASTRONAUT', 'CHEF', 'LAWYER'],
-  MOVIES: ['TITANIC', 'AVATAR', 'INCEPTION', 'GLADIATOR', 'CASABLANCA', 'ROCKY', 'JAWS', 'SUPERMAN', 'BATMAN', 'SPIDERMAN'],
-  SPORTS: ['BASKETBALL', 'VOLLEYBALL', 'SWIMMING', 'TENNIS', 'BASEBALL', 'HOCKEY', 'GOLF', 'SKIING', 'SURFING', 'BOXING'],
-  FAMOUS_BRANDS: ['COCA COLA', 'MCDONALDS', 'NIKE', 'APPLE', 'SAMSUNG', 'TOYOTA', 'MICROSOFT', 'GOOGLE', 'AMAZON', 'FACEBOOK'],
-  MUSICAL_INSTRUMENTS: ['PIANO', 'GUITAR', 'VIOLIN', 'DRUMS', 'SAXOPHONE', 'TRUMPET', 'FLUTE', 'HARMONICA', 'ACCORDION', 'BANJO'],
-  THINGS_IN_A_HOUSE: ['REFRIGERATOR', 'TELEVISION', 'MICROWAVE', 'SOFA', 'BOOKSHELF', 'MIRROR', 'CARPET', 'CHANDELIER', 'FIREPLACE', 'DISHWASHER']
-};
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -178,42 +91,39 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
 
   return (
     <View style={styles.carouselContainer}>
-        <ScrollView
+      <Text style={styles.carouselTitle}>🔤 {i18n.t('selectLetter')}</Text>
+      <View style={styles.carouselWrapper}>
+        <ScrollView 
           ref={scrollViewRef}
-          horizontal
+          horizontal 
           showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContent}
           style={styles.carouselScrollView}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           decelerationRate="fast"
-          bounces={false}
-          removeClippedSubviews={true}
-          showsVerticalScrollIndicator={false}
-          contentInsetAdjustmentBehavior="never"
         >
-          <View style={{ flexDirection: 'row', paddingHorizontal: 20 }}>
           {ALPHABET.map((letter) => {
-            try {
-              const isGuessed = safeGuessedLetters ? safeGuessedLetters.includes(letter) : false;
-              return (
-                <TouchableOpacity
-                  key={letter}
-                  style={[styles.letterCard, isGuessed && styles.letterCardDisabled]}
-                  onPress={() => handleLetterPress(letter)}
-                  disabled={isGuessed}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.letterText, isGuessed && styles.letterTextDisabled]}>
-                    {letter}
-                  </Text>
-                </TouchableOpacity>
-              );
-            } catch (error) {
-              console.error('Error rendering letter:', letter, error);
-              return null;
-            }
-          })}
-          </View>
+          try {
+            const isGuessed = safeGuessedLetters ? safeGuessedLetters.includes(letter) : false;
+            return (
+              <TouchableOpacity
+                key={letter}
+                style={[styles.letterCard, isGuessed && styles.letterCardDisabled]}
+                onPress={() => handleLetterPress(letter)}
+                disabled={isGuessed}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.letterText, isGuessed && styles.letterTextDisabled]}>
+                  {letter}
+                </Text>
+              </TouchableOpacity>
+            );
+          } catch (error) {
+            console.error('Error rendering letter:', letter, error);
+            return null;
+          }
+        })}
         </ScrollView>
         
         {/* Right fade indicator - shows when there are more letters to scroll */}
@@ -234,6 +144,7 @@ const LetterCarousel = ({ guessedLetters, onSelectLetter }: { guessedLetters: st
             )}
           </View>
         )}
+      </View>
     </View>
   );
 };
@@ -246,13 +157,9 @@ const WordInputScreen = ({ category, onSubmit, onBack }: { category: string, onS
       <Text style={styles.subtitle}>{i18n.t('categories.' + category as any)}</Text>
       <Text style={styles.instructions}>{i18n.t('enterAWord')}</Text>
       <TextInput
-        style={styles.input} 
-        value={word} 
-        onChangeText={(text) => setWord(text.toUpperCase())}
-        placeholder="SECRET WORD" 
-        autoCapitalize="characters"
-        autoCorrect={false} 
-        maxLength={20}
+        style={styles.input} value={word} onChangeText={setWord}
+        placeholder="SECRET WORD" autoCapitalize="characters"
+        autoCorrect={false} maxLength={20}
       />
       <View style={styles.buttonWrapper}>
         <Button 
@@ -276,9 +183,6 @@ export default function MainMenuScreen() {
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [currentGameData, setCurrentGameData] = useState<any>(null);
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
-  const [lastPlayedGameId, setLastPlayedGameId] = useState<string | null>(null);
-  const [isProcessingGuess, setIsProcessingGuess] = useState(false);
-  const [gameEndingSoundPlayed, setGameEndingSoundPlayed] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [gamesUnsubscribe, setGamesUnsubscribe] = useState<(() => void) | null>(null);
 
@@ -289,10 +193,10 @@ export default function MainMenuScreen() {
   useEffect(() => {
     async function loadSoundObject() {
       try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
+        const { sound } = await Audio.Sound.createAsync(
           require('../assets/sounds/correct.mp3')
         );
-        setSound(newSound);
+        setSound(sound);
       } catch (error) {
         console.error("Couldn't load sound", error);
       }
@@ -300,10 +204,7 @@ export default function MainMenuScreen() {
     loadSoundObject();
 
     return () => {
-      // Clean up sound on unmount
-      if (sound) {
-        sound.unloadAsync().catch(console.error);
-      }
+      sound?.unloadAsync();
     };
   }, []);
 
@@ -317,108 +218,28 @@ export default function MainMenuScreen() {
     };
   }, [gamesUnsubscribe]);
 
-  // Keep track of currently playing sound to prevent overlaps
-  const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
-  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
-
-  // Manual reset function for debugging sound issues
-  const resetSoundSystem = () => {
-    console.log('Manually resetting sound system');
-    if (currentSound) {
-      currentSound.unloadAsync().catch(console.error);
-    }
-    setCurrentSound(null);
-    setIsSoundPlaying(false);
-  };
-
-  // Delete game from database when completed
-  const deleteCompletedGame = async (gameId: string) => {
-    try {
-      console.log(`Deleting completed game: ${gameId}`);
-      await deleteDoc(doc(db, "games", gameId));
-      console.log(`✅ Game ${gameId} deleted successfully`);
-    } catch (error) {
-      console.error(`❌ Error deleting game ${gameId}:`, error);
-    }
-  };
-
-  // Generate a random game when no games are available
-  const generateRandomGame = async () => {
-    try {
-      console.log('🎲 Generating random game...');
-      
-      // Pick a random category
-      const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-      
-      // Pick a random word from that category
-      const categoryWords = CATEGORY_WORDS[randomCategory as keyof typeof CATEGORY_WORDS];
-      const randomWord = categoryWords[Math.floor(Math.random() * categoryWords.length)];
-      
-      console.log(`🎯 Generated game: ${randomCategory} - ${randomWord}`);
-      
-      // Create the game in database
-      const gameDocRef = await addDoc(collection(db, "games"), {
-        category: randomCategory,
-        secretWord: randomWord,
-        status: "waiting",
-        createdAt: serverTimestamp(),
-        guessedLetters: [],
-        wrongGuesses: 0
-      });
-      
-      console.log(`✅ Auto-generated game created with ID: ${gameDocRef.id}`);
-      return gameDocRef.id;
-      
-    } catch (error) {
-      console.error('❌ Error generating random game:', error);
-      Alert.alert("Error", "Could not generate a game. Please try again.");
-      return null;
-    }
-  };
-
-  // Simplified sound system to avoid blocking issues
+  // Play sound function
   async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
-    console.log(`🔊 Playing sound: ${soundType}`);
-    
+    if (!sound) return;
     try {
-      // Create a new sound object for each sound to avoid conflicts
-      let soundFile;
+      await sound.unloadAsync();
       switch (soundType) {
         case 'correct':
-          soundFile = require('../assets/sounds/correct.mp3');
+          await sound.loadAsync(require('../assets/sounds/correct.mp3'));
           break;
         case 'wrong':
-          soundFile = require('../assets/sounds/wrong.mp3');
+          await sound.loadAsync(require('../assets/sounds/wrong.mp3'));
           break;
         case 'win':
-          soundFile = require('../assets/sounds/win.mp3');
+          await sound.loadAsync(require('../assets/sounds/win.mp3'));
           break;
         case 'lose':
-          soundFile = require('../assets/sounds/lose.mp3');
+          await sound.loadAsync(require('../assets/sounds/lose.mp3'));
           break;
-        default:
-          console.warn(`Unknown sound type: ${soundType}`);
-          return;
       }
-
-      const { sound: newSound } = await Audio.Sound.createAsync(soundFile);
-      
-      // Play the sound
-      await newSound.playAsync();
-      console.log(`✅ ${soundType} sound started successfully`);
-      
-      // Set up cleanup when finished
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          console.log(`🎵 ${soundType} sound finished, cleaning up`);
-          newSound.unloadAsync().catch((error) => {
-            console.warn(`Error unloading ${soundType} sound:`, error);
-          });
-        }
-      });
-      
+      await sound.playAsync();
     } catch (error) {
-      console.error(`❌ Error playing ${soundType} sound:`, error);
+      console.error("Couldn't play sound", error);
     }
   }
 
@@ -446,14 +267,6 @@ export default function MainMenuScreen() {
     }
   };
 
-  const rejoinLastGame = async () => {
-    if (!lastPlayedGameId) {
-      Alert.alert("Error", "No previous game found.");
-      return;
-    }
-    await joinGame(lastPlayedGameId);
-  };
-
   const joinGame = async (gameId: string) => {
     if (!gameId || !gameId.trim()) {
       Alert.alert("Error", "Invalid game ID.");
@@ -472,14 +285,6 @@ export default function MainMenuScreen() {
           // Store game data and start playing
           setCurrentGameData({ ...gameData, id: gameId.trim() });
           setGuessedLetters(gameData.guessedLetters || []);
-          setLastPlayedGameId(gameId.trim());
-          setGameEndingSoundPlayed(false);
-          setGamePhase('playing_game');
-        } else if (gameData.status === "playing" && gameId.trim() === lastPlayedGameId) {
-          // Allow rejoining if this is the last game the player was in
-          setCurrentGameData({ ...gameData, id: gameId.trim() });
-          setGuessedLetters(gameData.guessedLetters || []);
-          setGameEndingSoundPlayed(false);
           setGamePhase('playing_game');
         } else {
           Alert.alert("Error", "This game is no longer available or already in progress.");
@@ -500,25 +305,14 @@ export default function MainMenuScreen() {
   };
 
   const makeGuess = async (letter: string) => {
-    console.log(`makeGuess called with: ${letter}`);
-    
-    if (isProcessingGuess) {
-      console.log('Already processing a guess, ignoring...');
-      return;
-    }
-    
-    setIsProcessingGuess(true);
-    
     try {
       if (!currentGameData || !letter || !letter.trim()) {
         console.warn('Invalid game data or letter:', { currentGameData: !!currentGameData, letter });
-        setIsProcessingGuess(false);
         return;
       }
       
       if (!guessedLetters) {
         console.warn('guessedLetters is null/undefined');
-        setIsProcessingGuess(false);
         return;
       }
       
@@ -527,7 +321,6 @@ export default function MainMenuScreen() {
       if (guessedLetters.includes(upperLetter)) {
         // This shouldn't happen since the letter should be disabled in the carousel
         console.warn('Letter already guessed:', upperLetter);
-        setIsProcessingGuess(false);
         return;
       }
       const newGuessedLetters = [...guessedLetters, upperLetter];
@@ -538,6 +331,13 @@ export default function MainMenuScreen() {
         currentWrongCount + 1;
 
       console.log(`Guess: ${upperLetter}, Correct: ${isCorrect}, Wrong count: ${currentWrongCount} -> ${wrongGuesses}`);
+
+      // Play sound for correct or wrong guess
+      if (isCorrect) {
+        playSound('correct');
+      } else {
+        playSound('wrong');
+      }
 
       // Update local state
       setGuessedLetters(newGuessedLetters);
@@ -553,7 +353,7 @@ export default function MainMenuScreen() {
         wrongGuesses: wrongGuesses
       });
 
-      // Check win/lose conditions first
+      // Check win/lose conditions
       const uniqueLettersInWord: string[] = Array.from(new Set(currentGameData.secretWord.split('').filter((char: string) => /[A-Z]/.test(char))));
       const allLettersGuessed = uniqueLettersInWord.every((letter: string) => newGuessedLetters.includes(letter));
       
@@ -562,40 +362,17 @@ export default function MainMenuScreen() {
       console.log(`Guessed letters: ${newGuessedLetters.join(', ')}`);
       console.log(`All letters guessed: ${allLettersGuessed}`);
       
-      // Play appropriate sound based on game state
       if (allLettersGuessed) {
-        console.log('Game won - playing win sound');
-        setGameEndingSoundPlayed(true);
         playSound('win');
         Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
-        // Delete the completed game from database and clear last played game
-        deleteCompletedGame(currentGameData.id);
-        setLastPlayedGameId(null);
       } else if (wrongGuesses >= 6) {
-        console.log('Game lost - playing lose sound');
-        setGameEndingSoundPlayed(true);
         playSound('lose');
         Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
-        // Delete the completed game from database and clear last played game
-        deleteCompletedGame(currentGameData.id);
-        setLastPlayedGameId(null);
-      } else if (!gameEndingSoundPlayed) {
-        // Game continues - play sound for this individual guess ONLY if no game-ending sound was played
-        console.log(`Game continues - playing ${isCorrect ? 'correct' : 'wrong'} sound`);
-        if (isCorrect) {
-          playSound('correct');
-        } else {
-          playSound('wrong');
-        }
-      } else {
-        console.log('Skipping individual guess sound - game ending sound already played');
       }
 
     } catch (e) {
       console.error("Error making guess: ", e);
       Alert.alert("Error", "Could not submit guess. Please try again.");
-    } finally {
-      setIsProcessingGuess(false);
     }
   };
 
@@ -620,9 +397,6 @@ export default function MainMenuScreen() {
     setAvailableGames([]);
     setCurrentGameData(null);
     setGuessedLetters([]);
-    // Reset sound system when returning to menu
-    resetSoundSystem();
-    // Don't clear lastPlayedGameId - we want to keep it for rejoining
   };
 
   const goToCreateGame = () => {
@@ -825,7 +599,33 @@ export default function MainMenuScreen() {
       .join(' ');
   };
 
-
+  // Helper function to get proper gallows with hanged man
+  const getHangmanDrawing = (wrongCount: number) => {
+    console.log(`Drawing hangman for wrong count: ${wrongCount}`);
+    const drawings = [
+      // 0 wrong - Empty gallows
+      "�‍☠️ THE GALLOWS �‍☠️\n\n    ┌─────────┐\n    │         │\n    │          \n    │          \n    │          \n    │          \n    │          \n  ══┴═══════════",
+      
+      // 1 wrong - Head appears
+      "⚰️ THE GALLOWS ⚰️\n\n    ┌─────────┐\n    │         │\n    │        😰\n    │          \n    │          \n    │          \n    │          \n  ══┴═══════════",
+      
+      // 2 wrong - Character appears worried
+      "😰 GETTING TENSE 😰\n\n🔥   💀   �\n  ⚠️ 😟 ⚠️\n💥       💥\n  ⚡ 👤 ⚡\n🌋       🌋\n  💣   💣",
+      
+      // 3 wrong - Danger escalates
+      "🚨 DANGER ZONE 🚨\n\n💥   🔴   �\n  ⚠️ 😨 ⚠️\n🔥       🔥\n  💀 🧟 💀\n⚡       ⚡\n  💣   💣",
+      
+      // 4 wrong - Critical situation
+      "💀 CRITICAL! 💀\n\n🔥   ☠️   🔥\n  💥 😱 �\n⚡       ⚡\n  🚨 👻 🚨\n💣       💣\n  ⚠️   ⚠️",
+      
+      // 5 wrong - Final warning
+      "☠️ FINAL WARNING ☠️\n\n💀   🔥   �\n  ⚡ 😵 ⚡\n💥       💥\n  💣 ⚰️ 💣\n🚨       🚨\n  ☠️   ☠️",
+      
+      // 6 wrong - Game over
+      "💀 GAME OVER 💀\n\n⚰️   💀   ⚰️\n  🔥 👻 �\n💥       💥\n  ⚡ ☠️ ⚡\n💣       💣\n🚨 R.I.P 🚨"
+    ];
+    return drawings[Math.min(wrongCount, 6)];
+  };
 
   if (gamePhase === 'playing_game' && currentGameData && currentGameData.secretWord) {
     const wrongCount = currentGameData.wrongGuesses || 0;
@@ -849,14 +649,25 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         
-        {/* Category Display */}
-        <Text style={styles.categoryDisplay}>{i18n.t('categories.' + currentGameData.category as any)}</Text>
+        {/* Hangman Drawing - The Star of the Show! */}
+        <View style={styles.hangmanContainer}>
+          <Text style={styles.hangmanTitle}>🎭 THE GALLOWS 🎭</Text>
+          <Text style={styles.hangmanDrawing}>{getHangmanDrawing(wrongCount)}</Text>
+          <Text style={styles.hangmanStatus}>
+            {wrongCount === 0 ? "😌 Safe for now..." : 
+             wrongCount < 3 ? "😰 Getting dangerous..." :
+             wrongCount < 5 ? "😱 Almost hanged!" :
+             wrongCount === 5 ? "💀 One mistake left!" :
+             "☠️ HANGED!"}
+          </Text>
+        </View>
         
-        {/* Beautiful SVG Hangman - Now the star of the show! */}
-        <HangmanSVG wrongCount={wrongCount} />
-        
-        {/* Word Display */}
-        <Text style={styles.wordDisplay}>{displayWord()}</Text>
+        {/* Game Info */}
+        <View style={styles.gameInfoContainer}>
+          <Text style={styles.categoryInfo}>📂 {i18n.t('categories.' + currentGameData.category as any)}</Text>
+          <Text style={styles.wordDisplay}>{displayWord()}</Text>
+          <Text style={styles.guessInfo}>❌ Wrong: {wrongCount}/6 | ✅ Letters: {safeGuessedLetters.length}</Text>
+        </View>
 
         {/* Letter Carousel - only show if game is not over */}
         {!isGameOver && !isWon && (
@@ -879,11 +690,6 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('title')}</Text>
-        {lastPlayedGameId && (
-          <View style={styles.buttonWrapper}>
-            <Button title={i18n.t('continueGame')} onPress={rejoinLastGame} color="#4CAF50" />
-          </View>
-        )}
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('createNewGame')} onPress={goToCreateGame} />
         </View>
@@ -905,19 +711,6 @@ export default function MainMenuScreen() {
           <View style={styles.noGamesContainer}>
             <Text style={styles.noGamesText}>{i18n.t('noGamesAvailable')}</Text>
             <Text style={styles.noGamesSubText}>{i18n.t('createFirstGame')}</Text>
-            <View style={styles.buttonWrapper}>
-              <Button 
-                title={i18n.t('generateRandomGame')} 
-                onPress={async () => {
-                  const gameId = await generateRandomGame();
-                  if (gameId) {
-                    // Auto-join the generated game
-                    await joinGame(gameId);
-                  }
-                }} 
-                color="#FF6B35" 
-              />
-            </View>
           </View>
         ) : (
           <View style={styles.gamesListContainer}>
@@ -964,6 +757,8 @@ export default function MainMenuScreen() {
       <SafeAreaView style={styles.container}>
         <LanguageSwitcher />
         <Text style={styles.title}>{i18n.t('gameCreated')}</Text>
+        <Text style={styles.subtitle}>{i18n.t('shareCode')}</Text>
+        <Text style={styles.gameIdText}>{createdGameId}</Text>
         <View style={styles.buttonWrapper}>
           <Button title={i18n.t('createAnotherGame')} onPress={resetToMainMenu} />
         </View>
@@ -1019,14 +814,14 @@ const styles = StyleSheet.create({
     container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     backgroundColor: '#f5f5f5',
-    paddingTop: 50,
-    paddingBottom: 30,
+    paddingTop: 100, // Space for language switcher
+    paddingBottom: 50, // Add bottom padding for navigation area
   },
   languageSwitcher: {
     position: 'absolute',
-    top: 20,
+    top: 50,
     right: 20,
     flexDirection: 'row',
     zIndex: 1, // Ensure it's above other elements
@@ -1043,19 +838,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#333',
     textAlign: 'center',
-  },
-  categoryDisplay: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#2196F3',
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 25,
-    backgroundColor: '#E3F2FD',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   instructions: {
     fontSize: 16,
@@ -1107,30 +889,54 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   hangmanContainer: {
+    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 30,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    marginBottom: 20,
+  },
+  hangmanTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   hangmanDrawing: {
-    fontSize: 18,
+    fontSize: 28,
     fontFamily: 'monospace',
-    backgroundColor: '#f0f0f0',
-    padding: 20,
-    borderRadius: 8,
-    marginVertical: 30,
+    backgroundColor: '#2c3e50',
+    color: '#ecf0f1',
+    padding: 25,
+    borderRadius: 15,
+    marginBottom: 15,
     textAlign: 'center',
-    minHeight: 200,
+    lineHeight: 35,
+    fontWeight: 'bold',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 3,
+    borderColor: '#34495e',
+    minHeight: 280,
+    width: '90%',
+  },
+  hangmanStatus: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  gameInfoContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  categoryInfo: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   wordDisplay: {
     fontSize: 32,
@@ -1156,8 +962,7 @@ const styles = StyleSheet.create({
   carouselContainer: {
     width: '100%',
     marginBottom: 30,
-    backgroundColor: 'transparent',
-    paddingVertical: 0,
+    paddingVertical: 10,
   },
   carouselTitle: {
     fontSize: 20,
@@ -1168,14 +973,11 @@ const styles = StyleSheet.create({
   },
   carouselScrollView: {
     maxHeight: 80,
-    backgroundColor: 'transparent',
-    flexGrow: 0,
-    flexShrink: 0,
   },
   carouselContent: {
     paddingHorizontal: 20,
-    paddingVertical: 0,
-    flexDirection: 'row',
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   letterCard: {
     backgroundColor: '#2196F3',
@@ -1210,9 +1012,6 @@ const styles = StyleSheet.create({
   carouselWrapper: {
     position: 'relative',
     width: '100%',
-    backgroundColor: 'transparent',
-    paddingVertical: 0,
-    marginVertical: 0,
   },
   rightFadeIndicator: {
     position: 'absolute',
@@ -1223,7 +1022,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255,255,255,0.8)',
   },
   scrollHintContainer: {
     alignItems: 'center',

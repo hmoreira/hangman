@@ -17,6 +17,7 @@
   "availableGames": "Available Games",
   "noGamesAvailable": "No games available",
   "createFirstGame": "Be the first to create a game!",
+  "generateRandomGame": "🎲 Generate Random Game",
   "refreshGames": "Refresh Games",
   "categories": {
     "ANIMALS": "ANIMALS",
