@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
-import { db } from '../firebaseConfig';
+import { db } from './firebaseConfig';
 import i18n from '../i18n';
 import { Audio } from 'expo-av';
 import Svg, { Line, Circle, Path } from 'react-native-svg';
