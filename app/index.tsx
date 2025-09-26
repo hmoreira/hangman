@@ -2,8 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Button, Alert, TextInput, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore"; 
-import { db } from '../firebaseConfig';
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 import i18n from '../i18n';
+
+// Firebase configuration embedded to avoid import issues in EAS build
+const firebaseConfig = {
+  apiKey: "AIzaSyArS_yBTitBjQGgfYrLubU2P0G8wZ5ZKbg",
+  authDomain: "hangman-f3695.firebaseapp.com",
+  projectId: "hangman-f3695",
+  storageBucket: "hangman-f3695.firebasestorage.app",
+  messagingSenderId: "511991898799",
+  appId: "1:511991898799:web:ed3e23020ee55b6d79ea5a"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 import { Audio } from 'expo-av';
 import Svg, { Line, Circle, Path } from 'react-native-svg';
 
