@@ -16,7 +16,13 @@ A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, 
 
 ## 📱 Screenshots
 
-> Add screenshots here for best effect!
+<p align="center">
+	<img src="assets/images/first%20page.jpeg" alt="First Page" width="250" />
+	<img src="assets/images/choosing%20a%20game.jpeg" alt="Choosing a Game" width="250" />
+	<img src="assets/images/playing%20the%20game.jpeg" alt="Playing the Game" width="250" />
+</p>
+
+**First Page** | **Choosing a Game** | **Playing the Game**
 
 ## 🛠️ Getting Started
 
