@@ -1,6 +1,14 @@
 {
   "expo": {
-    "name": "Hangman",
+    "name": "Hang Me",
+    "locales": {
+      "en": {
+        "name": "Hang Me"
+      },
+      "pt": {
+        "name": "Me Enforque"
+      }
+    },
     "slug": "hangman",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,6 +24,7 @@
       "supportsTablet": false
     },
     "android": {
+      "label": "Hang Me",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#4a90e2"
