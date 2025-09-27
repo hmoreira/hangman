@@ -2,7 +2,10 @@
 
 A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, Firebase, and TypeScript. Supports both English and Portuguese with full localization.
 
-![screenshot](assets/images/partial-react-logo.png)
+
+<p align="center">
+	<img src="assets/images/gallows.png" alt="Gallows Logo" width="180" />
+</p>
 
 ## 🚀 Features
 
