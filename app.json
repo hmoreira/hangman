@@ -1,14 +1,6 @@
 {
   "expo": {
     "name": "Hang Me",
-    "locales": {
-      "en": {
-        "name": "Hang Me"
-      },
-      "pt": {
-        "name": "Me Enforque"
-      }
-    },
     "slug": "hangman",
     "version": "1.0.0",
     "orientation": "portrait",
