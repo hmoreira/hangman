@@ -4,7 +4,7 @@ A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, 
 
 
 <p align="center">
-	<img src="assets/images/gallows.png" alt="Gallows Logo" width="180" />
+	<img src="assets/images/gallows.png" alt="Gallows Logo" width="320" />
 </p>
 
 ## 🚀 Features
