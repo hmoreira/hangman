@@ -20,6 +20,9 @@
   "createFirstGame": "Be the first to create a game!",
   "generateRandomGame": "🎲 Generate Random Game",
   "refreshGames": "Refresh Games",
+  "youWon": "🎉 You Won!",
+  "youLost": "💀 You Lost!",
+  "theWordWas": "The word was:",
   "categories": {
     "ANIMALS": "ANIMALS",
     "CITIES": "CITIES",

@@ -645,7 +645,7 @@ export default function MainMenuScreen() {
         console.log('Game won - playing win sound');
         setGameEndingSoundPlayed(true);
         playSound('win');
-        Alert.alert("🎉 You Won!", `The word was: ${currentGameData.secretWord}`);
+        Alert.alert(i18n.t('youWon'), `${i18n.t('theWordWas')} ${currentGameData.secretWord}`);
         // Delete the completed game from database and clear last played game
         deleteCompletedGame(currentGameData.id);
         setLastPlayedGameId(null);
@@ -653,7 +653,7 @@ export default function MainMenuScreen() {
         console.log('Game lost - playing lose sound');
         setGameEndingSoundPlayed(true);
         playSound('lose');
-        Alert.alert("💀 You Lost!", `The word was: ${currentGameData.secretWord}`);
+        Alert.alert(i18n.t('youLost'), `${i18n.t('theWordWas')} ${currentGameData.secretWord}`);
         // Delete the completed game from database and clear last played game
         deleteCompletedGame(currentGameData.id);
         setLastPlayedGameId(null);
