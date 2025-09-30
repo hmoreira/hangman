@@ -19,7 +19,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-import { Audio } from 'expo-av';
+// ...existing code...
 import Svg, { Line, Circle, Path } from 'react-native-svg';
 
 // Beautiful SVG Hangman Component
@@ -308,8 +308,7 @@ export default function MainMenuScreen() {
   const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
   const [lastPlayedGameId, setLastPlayedGameId] = useState<string | null>(null);
   const [isProcessingGuess, setIsProcessingGuess] = useState(false);
-  const [gameEndingSoundPlayed, setGameEndingSoundPlayed] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  // ...existing code...
   const [gamesUnsubscribe, setGamesUnsubscribe] = useState<(() => void) | null>(null);
 
   // This state is our single source of truth.
@@ -330,27 +329,7 @@ export default function MainMenuScreen() {
     return wordList;
   };
 
-  // Load and cleanup sound
-  useEffect(() => {
-    async function loadSoundObject() {
-      try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/correct.mp3')
-        );
-        setSound(newSound);
-      } catch (error) {
-        console.error("Couldn't load sound", error);
-      }
-    }
-    loadSoundObject();
-
-    return () => {
-      // Clean up sound on unmount
-      if (sound) {
-        sound.unloadAsync().catch(console.error);
-      }
-    };
-  }, []);
+  // ...existing code...
 
   // Cleanup games listener on component unmount
   useEffect(() => {
@@ -362,19 +341,7 @@ export default function MainMenuScreen() {
     };
   }, [gamesUnsubscribe]);
 
-  // Keep track of currently playing sound to prevent overlaps
-  const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
-  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
-
-  // Manual reset function for debugging sound issues
-  const resetSoundSystem = () => {
-    console.log('Manually resetting sound system');
-    if (currentSound) {
-      currentSound.unloadAsync().catch(console.error);
-    }
-    setCurrentSound(null);
-    setIsSoundPlaying(false);
-  };
+  // ...existing code...
 
   // Delete game from database when completed
   const deleteCompletedGame = async (gameId: string) => {
@@ -423,51 +390,7 @@ export default function MainMenuScreen() {
     }
   };
 
-  // Simplified sound system to avoid blocking issues
-  async function playSound(soundType: 'correct' | 'wrong' | 'win' | 'lose') {
-    console.log(`🔊 Playing sound: ${soundType}`);
-    
-    try {
-      // Create a new sound object for each sound to avoid conflicts
-      let soundFile;
-      switch (soundType) {
-        case 'correct':
-          soundFile = require('../assets/sounds/correct.mp3');
-          break;
-        case 'wrong':
-          soundFile = require('../assets/sounds/wrong.mp3');
-          break;
-        case 'win':
-          soundFile = require('../assets/sounds/win.mp3');
-          break;
-        case 'lose':
-          soundFile = require('../assets/sounds/lose.mp3');
-          break;
-        default:
-          console.warn(`Unknown sound type: ${soundType}`);
-          return;
-      }
-
-      const { sound: newSound } = await Audio.Sound.createAsync(soundFile);
-      
-      // Play the sound
-      await newSound.playAsync();
-      console.log(`✅ ${soundType} sound started successfully`);
-      
-      // Set up cleanup when finished
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          console.log(`🎵 ${soundType} sound finished, cleaning up`);
-          newSound.unloadAsync().catch((error) => {
-            console.warn(`Error unloading ${soundType} sound:`, error);
-          });
-        }
-      });
-      
-    } catch (error) {
-      console.error(`❌ Error playing ${soundType} sound:`, error);
-    }
-  }
+  // ...existing code...
 
   // This function updates both our state AND the i18n locale.
   const changeLocale = async (newLocale: string) => {
@@ -551,13 +474,13 @@ export default function MainMenuScreen() {
           setCurrentGameData({ ...gameData, id: gameId.trim() });
           setGuessedLetters(gameData.guessedLetters || []);
           setLastPlayedGameId(gameId.trim());
-          setGameEndingSoundPlayed(false);
+          // ...existing code...
           setGamePhase('playing_game');
         } else if (gameData.status === "playing" && gameId.trim() === lastPlayedGameId) {
           // Allow rejoining if this is the last game the player was in
           setCurrentGameData({ ...gameData, id: gameId.trim() });
           setGuessedLetters(gameData.guessedLetters || []);
-          setGameEndingSoundPlayed(false);
+          // ...existing code...
           setGamePhase('playing_game');
         } else {
           Alert.alert("Error", "This game is no longer available or already in progress.");
@@ -642,32 +565,17 @@ export default function MainMenuScreen() {
       
       // Play appropriate sound based on game state
       if (allLettersGuessed) {
-        console.log('Game won - playing win sound');
-        setGameEndingSoundPlayed(true);
-        playSound('win');
         Alert.alert(i18n.t('youWon'), `${i18n.t('theWordWas')} ${currentGameData.secretWord}`);
         // Delete the completed game from database and clear last played game
         deleteCompletedGame(currentGameData.id);
         setLastPlayedGameId(null);
       } else if (wrongGuesses >= 6) {
-        console.log('Game lost - playing lose sound');
-        setGameEndingSoundPlayed(true);
-        playSound('lose');
         Alert.alert(i18n.t('youLost'), `${i18n.t('theWordWas')} ${currentGameData.secretWord}`);
         // Delete the completed game from database and clear last played game
         deleteCompletedGame(currentGameData.id);
         setLastPlayedGameId(null);
-      } else if (!gameEndingSoundPlayed) {
-        // Game continues - play sound for this individual guess ONLY if no game-ending sound was played
-        console.log(`Game continues - playing ${isCorrect ? 'correct' : 'wrong'} sound`);
-        if (isCorrect) {
-          playSound('correct');
-        } else {
-          playSound('wrong');
-        }
-      } else {
-        console.log('Skipping individual guess sound - game ending sound already played');
       }
+      // ...existing code...
 
     } catch (e) {
       console.error("Error making guess: ", e);
@@ -698,8 +606,7 @@ export default function MainMenuScreen() {
     setAvailableGames([]);
     setCurrentGameData(null);
     setGuessedLetters([]);
-    // Reset sound system when returning to menu
-    resetSoundSystem();
+  // ...existing code...
     // Don't clear lastPlayedGameId - we want to keep it for rejoining
   };
 
@@ -930,7 +837,9 @@ export default function MainMenuScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>✨ Challenge your vocabulary! ✨</Text>
+          <View style={styles.footerMessageBox}>
+            <Text style={styles.footerText}>✨ {i18n.t('challengeVocabulary')} ✨</Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -1404,11 +1313,24 @@ const styles = StyleSheet.create({
     marginTop: 30,
     marginBottom: 20,
   },
+  footerMessageBox: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   footerText: {
-    fontSize: 16,
-    color: '#7f8c8d',
+    fontSize: 20,
+    color: '#2c3e50',
+    fontWeight: 'bold',
     fontStyle: 'italic',
     textAlign: 'center',
+    letterSpacing: 1,
   },
   gameContent: {
     flex: 1,
