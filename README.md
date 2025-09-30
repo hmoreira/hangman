@@ -1,6 +1,7 @@
+
 # Hangman (Me Enforque)
 
-A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, Firebase, and TypeScript. Supports both English and Portuguese with full localization.
+A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, Firebase, and TypeScript. Supports both English and Portuguese with full localization. Now simplified for reliability: sound features have been removed.
 
 
 <p align="center">
@@ -14,8 +15,9 @@ A beautiful, real-time, multiplayer Hangman game built with React Native, Expo, 
 - 🌍 Internationalization: English & Portuguese (PT as default)
 - 🔒 Secure config: Firebase keys via environment variables & EAS secrets
 - 📦 Easy APK builds with Expo Application Services (EAS)
-- 🔊 Sound effects for win/lose/correct/incorrect
 - 🏷️ Category-based word selection
+
+> **Note:** Sound effects have been removed for improved reliability and simplicity.
 
 ## 📱 Screenshots
 
