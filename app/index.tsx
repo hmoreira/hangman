@@ -825,13 +825,22 @@ export default function MainMenuScreen() {
               <Text style={styles.primaryButtonText}>🔄 {i18n.t('continueGame')}</Text>
             </TouchableOpacity>
           )}
-          
+
           <TouchableOpacity style={styles.menuButton} onPress={goToCreateGame}>
             <Text style={styles.menuButtonText}>✨ {i18n.t('createNewGame')}</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuButton} onPress={goToBrowseGames}>
             <Text style={styles.menuButtonText}>🎯 {i18n.t('joinExistingGame')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuButton} onPress={async () => {
+            const gameId = await generateRandomGame();
+            if (gameId) {
+              await joinGame(gameId);
+            }
+          }}>
+            <Text style={styles.menuButtonText}>🎲 {i18n.t('playRandomGame')}</Text>
           </TouchableOpacity>
         </View>
 
